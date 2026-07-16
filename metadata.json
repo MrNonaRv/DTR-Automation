@@ -1,0 +1,6 @@
+{
+  "name": "Mambusao DTR Automate",
+  "description": "Full-stack time and attendance system for the Municipality of Mambusao.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
