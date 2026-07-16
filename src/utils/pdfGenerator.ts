@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { AttendanceRecord } from "./excelParser";
 
+
+
 export async function generateDTR(
   employeeName: string,
   period: string,
@@ -11,11 +13,8 @@ export async function generateDTR(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({
-        size: "A4",
-        margin: 20,
-      });
-
+      const doc = new PDFDocument({ size: "A4", margin: 20 });
+      doc.initForm();
       const buffers: Buffer[] = [];
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(buffers)));
@@ -96,18 +95,18 @@ export async function generateDTR(
         doc.moveTo(leftX, y).lineTo(rightX, y).stroke();
 
         // Determine rows based on print range
-        let startDay = 1;
-        let endDay = 31;
+        let dataStartDay = 1;
+        let dataEndDay = 31;
         if (printRange === '1-15') {
-          endDay = 15;
+          dataEndDay = 15;
         } else if (printRange === '16-31') {
-          startDay = 16;
+          dataStartDay = 16;
         }
 
         // Draw rows
         const rowHeight = 15;
         doc.font("Helvetica").fontSize(8);
-        for (let i = startDay; i <= endDay; i++) {
+        for (let i = 1; i <= 31; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
           
@@ -139,11 +138,20 @@ export async function generateDTR(
             return rDay === i;
           });
 
-          if (record) {
-            if (record.amIn) doc.text(record.amIn, cols[1], y + 4, { width: colW[1], align: "center" });
-            if (record.amOut) doc.text(record.amOut, cols[2], y + 4, { width: colW[2], align: "center" });
-            if (record.pmIn) doc.text(record.pmIn, cols[3], y + 4, { width: colW[3], align: "center" });
-            if (record.pmOut) doc.text(record.pmOut, cols[4], y + 4, { width: colW[4], align: "center" });
+          const isDateInRange = i >= dataStartDay && i <= dataEndDay;
+          const amInVal = (record && isDateInRange && record.amIn) ? record.amIn : "";
+          const amOutVal = (record && isDateInRange && record.amOut) ? record.amOut : "";
+          const pmInVal = (record && isDateInRange && record.pmIn) ? record.pmIn : "";
+          const pmOutVal = (record && isDateInRange && record.pmOut) ? record.pmOut : "";
+
+          const safeEmpName = employeeName.replace(/[^a-zA-Z0-9]/g, '_');
+          const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
+
+          if (isDateInRange) {
+            doc.formText(`${fieldPrefix}_amIn`, cols[1], y + 1, colW[1], rowHeight - 2, { align: "center", value: amInVal });
+            doc.formText(`${fieldPrefix}_amOut`, cols[2], y + 1, colW[2], rowHeight - 2, { align: "center", value: amOutVal });
+            doc.formText(`${fieldPrefix}_pmIn`, cols[3], y + 1, colW[3], rowHeight - 2, { align: "center", value: pmInVal });
+            doc.formText(`${fieldPrefix}_pmOut`, cols[4], y + 1, colW[4], rowHeight - 2, { align: "center", value: pmOutVal });
           }
 
           y += rowHeight;
@@ -212,11 +220,8 @@ export async function generateAllDTRs(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({
-        size: "A4",
-        margin: 20,
-      });
-
+      const doc = new PDFDocument({ size: "A4", margin: 20 });
+      doc.initForm();
       const buffers: Buffer[] = [];
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(buffers)));
@@ -296,18 +301,18 @@ export async function generateAllDTRs(
         doc.moveTo(leftX, y).lineTo(rightX, y).stroke();
 
         // Determine rows based on print range
-        let startDay = 1;
-        let endDay = 31;
+        let dataStartDay = 1;
+        let dataEndDay = 31;
         if (printRange === '1-15') {
-          endDay = 15;
+          dataEndDay = 15;
         } else if (printRange === '16-31') {
-          startDay = 16;
+          dataStartDay = 16;
         }
 
         // Draw rows
         const rowHeight = 15;
         doc.font("Helvetica").fontSize(8);
-        for (let i = startDay; i <= endDay; i++) {
+        for (let i = 1; i <= 31; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
           
@@ -339,11 +344,20 @@ export async function generateAllDTRs(
             return rDay === i;
           });
 
-          if (record) {
-            if (record.amIn) doc.text(record.amIn, cols[1], y + 4, { width: colW[1], align: "center" });
-            if (record.amOut) doc.text(record.amOut, cols[2], y + 4, { width: colW[2], align: "center" });
-            if (record.pmIn) doc.text(record.pmIn, cols[3], y + 4, { width: colW[3], align: "center" });
-            if (record.pmOut) doc.text(record.pmOut, cols[4], y + 4, { width: colW[4], align: "center" });
+          const isDateInRange = i >= dataStartDay && i <= dataEndDay;
+          const amInVal = (record && isDateInRange && record.amIn) ? record.amIn : "";
+          const amOutVal = (record && isDateInRange && record.amOut) ? record.amOut : "";
+          const pmInVal = (record && isDateInRange && record.pmIn) ? record.pmIn : "";
+          const pmOutVal = (record && isDateInRange && record.pmOut) ? record.pmOut : "";
+
+          const safeEmpName = employeeName.replace(/[^a-zA-Z0-9]/g, '_');
+          const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
+
+          if (isDateInRange) {
+            doc.formText(`${fieldPrefix}_amIn`, cols[1], y + 1, colW[1], rowHeight - 2, { align: "center", value: amInVal });
+            doc.formText(`${fieldPrefix}_amOut`, cols[2], y + 1, colW[2], rowHeight - 2, { align: "center", value: amOutVal });
+            doc.formText(`${fieldPrefix}_pmIn`, cols[3], y + 1, colW[3], rowHeight - 2, { align: "center", value: pmInVal });
+            doc.formText(`${fieldPrefix}_pmOut`, cols[4], y + 1, colW[4], rowHeight - 2, { align: "center", value: pmOutVal });
           }
 
           y += rowHeight;

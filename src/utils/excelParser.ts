@@ -122,10 +122,10 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
 
       records.push({
         date: dateStr,
-        amIn: amIn ? format(amIn, "HH:mm") : null,
-        amOut: amOut ? format(amOut, "HH:mm") : null,
-        pmIn: pmIn ? format(pmIn, "HH:mm") : null,
-        pmOut: pmOut ? format(pmOut, "HH:mm") : null,
+        amIn: amIn ? format(amIn, "h:mm a") : null,
+        amOut: amOut ? format(amOut, "h:mm a") : null,
+        pmIn: pmIn ? format(pmIn, "h:mm a") : null,
+        pmOut: pmOut ? format(pmOut, "h:mm a") : null,
       });
     }
 

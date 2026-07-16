@@ -17,6 +17,11 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b
 )
 
+:: Stop any existing server running on port 3000
+FOR /F "tokens=5" %%a in ('netstat -aon ^| find ":3000 " ^| find "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 :: Install dependencies if not present
 IF NOT EXIST "node_modules" (
     echo [INFO] Installing required packages...
@@ -29,9 +34,13 @@ IF NOT EXIST "dist\server.cjs" (
     call npm run build
 )
 
-:: Start the server
-echo [INFO] Starting the server...
-start /b cmd /c "node dist/server.cjs"
+:: Create a VBScript to run Node invisibly
+echo Set WshShell = CreateObject("WScript.Shell") > run-hidden.vbs
+echo WshShell.Run "cmd.exe /c node dist/server.cjs", 0, false >> run-hidden.vbs
+
+:: Start the server invisibly
+echo [INFO] Starting the server in the background...
+cscript //nologo run-hidden.vbs
 
 :: Wait for a few seconds to let the server boot up
 timeout /t 3 /nobreak >nul
@@ -43,7 +52,8 @@ start chrome --app=http://localhost:3000
 echo.
 echo ===================================================
 echo [SUCCESS] The application is running!
-echo Keep this command window open. 
-echo To stop the system, simply close this black window.
+echo This window will now close automatically.
+echo To stop the system later, use the "stop-windows.bat" file.
 echo ===================================================
-pause
+timeout /t 3 /nobreak >nul
+exit
