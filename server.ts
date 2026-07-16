@@ -93,15 +93,16 @@ async function startServer() {
   // API Route for generating DTR PDF
   app.post("/api/generate-dtr", async (req, res) => {
     try {
-      const { employeeName, period, records } = req.body;
+      const { employeeName, period, records, printRange } = req.body;
       if (!employeeName || !records) {
         return res.status(400).json({ error: "Missing employeeName or records in request body" });
       }
 
-      const pdfBuffer = await generateDTR(employeeName, period || "", records);
+      const pdfBuffer = await generateDTR(employeeName, period || "", records, printRange);
 
+      const formattedPeriod = period ? `_${period.replace(/\s+/g, '_')}` : "";
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="DTR_${employeeName.replace(/\s+/g, '_')}.pdf"`);
+      res.setHeader("Content-Disposition", `attachment; filename="DTR_${employeeName.replace(/\s+/g, '_')}${formattedPeriod}.pdf"`);
       res.send(pdfBuffer);
     } catch (error: any) {
       console.error("Error generating PDF:", error);
@@ -112,16 +113,17 @@ async function startServer() {
   // API Route for generating all DTR PDFs
   app.post("/api/generate-all-dtrs", async (req, res) => {
     try {
-      const { period, employees } = req.body;
+      const { period, employees, printRange } = req.body;
       if (!employees || !Array.isArray(employees) || employees.length === 0) {
         return res.status(400).json({ error: "Missing or invalid employees array in request body" });
       }
 
       const { generateAllDTRs } = await import("./src/utils/pdfGenerator.js");
-      const pdfBuffer = await generateAllDTRs(period || "", employees);
+      const pdfBuffer = await generateAllDTRs(period || "", employees, printRange);
 
+      const formattedPeriodAll = period ? `_${period.replace(/\s+/g, '_')}` : "";
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="All_DTRs.pdf"`);
+      res.setHeader("Content-Disposition", `attachment; filename="All_DTRs${formattedPeriodAll}.pdf"`);
       res.send(pdfBuffer);
     } catch (error: any) {
       console.error("Error generating all PDFs:", error);

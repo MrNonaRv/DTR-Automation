@@ -1,11 +1,11 @@
 {
-  "name": "Mambusao DTR Automate",
+  "name": "DTR Automate",
   "short_name": "DTR Automate",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
-  "description": "Daily Time Record automation system for Mambusao",
+  "description": "Daily Time Record automation system",
   "icons": [
     {
       "src": "/Systemlogo.jpg",

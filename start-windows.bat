@@ -1,8 +1,8 @@
 @echo off
-TITLE Mambusao DTR Automate
+TITLE DTR Automate
 
 echo ===================================================
-echo Mambusao DTR Automate - Local Server Startup
+echo DTR Automate - Local Server Startup
 echo ===================================================
 
 :: Check if Node.js is installed

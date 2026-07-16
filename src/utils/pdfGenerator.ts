@@ -6,7 +6,8 @@ import { AttendanceRecord } from "./excelParser";
 export async function generateDTR(
   employeeName: string,
   period: string,
-  records: AttendanceRecord[]
+  records: AttendanceRecord[],
+  printRange: 'full' | '1-15' | '16-31' = 'full'
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -94,10 +95,19 @@ export async function generateDTR(
         y += headerHeight;
         doc.moveTo(leftX, y).lineTo(rightX, y).stroke();
 
-        // Draw 31 rows
+        // Determine rows based on print range
+        let startDay = 1;
+        let endDay = 31;
+        if (printRange === '1-15') {
+          endDay = 15;
+        } else if (printRange === '16-31') {
+          startDay = 16;
+        }
+
+        // Draw rows
         const rowHeight = 15;
         doc.font("Helvetica").fontSize(8);
-        for (let i = 1; i <= 31; i++) {
+        for (let i = startDay; i <= endDay; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
           
@@ -197,7 +207,8 @@ export async function generateDTR(
 
 export async function generateAllDTRs(
   period: string,
-  employees: { employeeName: string, records: AttendanceRecord[] }[]
+  employees: { employeeName: string, records: AttendanceRecord[] }[],
+  printRange: 'full' | '1-15' | '16-31' = 'full'
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -284,10 +295,19 @@ export async function generateAllDTRs(
         y += headerHeight;
         doc.moveTo(leftX, y).lineTo(rightX, y).stroke();
 
-        // Draw 31 rows
+        // Determine rows based on print range
+        let startDay = 1;
+        let endDay = 31;
+        if (printRange === '1-15') {
+          endDay = 15;
+        } else if (printRange === '16-31') {
+          startDay = 16;
+        }
+
+        // Draw rows
         const rowHeight = 15;
         doc.font("Helvetica").fontSize(8);
-        for (let i = 1; i <= 31; i++) {
+        for (let i = startDay; i <= endDay; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
           

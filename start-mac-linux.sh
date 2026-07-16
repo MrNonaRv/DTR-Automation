@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Starting Mambusao DTR Automate..."
+echo "Starting DTR Automate..."
 
 if ! command -v node &> /dev/null
 then
