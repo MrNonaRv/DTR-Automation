@@ -100,7 +100,35 @@ export async function generateDTR(
         for (let i = 1; i <= 31; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
-          const record = records.find(r => parseInt(r.date.split("-")[2], 10) === i);
+          
+          let targetMonth = -1;
+          let targetYear = -1;
+          // In generateDTR and generateAllDTRs, period is available in the closure
+          const parsedDate = new Date(period);
+          if (!isNaN(parsedDate.getTime())) {
+            targetMonth = parsedDate.getMonth() + 1;
+            targetYear = parsedDate.getFullYear();
+          } else if (records.length > 0) {
+            const parts = records[0].date.split("-");
+            if (parts.length >= 2) {
+              targetYear = parseInt(parts[0], 10);
+              targetMonth = parseInt(parts[1], 10);
+            }
+          }
+          
+          const record = records.find(r => {
+            const parts = r.date.split("-");
+            if (parts.length < 3) return false;
+            const rYear = parseInt(parts[0], 10);
+            const rMonth = parseInt(parts[1], 10);
+            const rDay = parseInt(parts[2], 10);
+            
+            if (targetYear !== -1 && targetMonth !== -1) {
+              return rYear === targetYear && rMonth === targetMonth && rDay === i;
+            }
+            return rDay === i;
+          });
+
           if (record) {
             if (record.amIn) doc.text(record.amIn, cols[1], y + 4, { width: colW[1], align: "center" });
             if (record.amOut) doc.text(record.amOut, cols[2], y + 4, { width: colW[2], align: "center" });
@@ -262,7 +290,35 @@ export async function generateAllDTRs(
         for (let i = 1; i <= 31; i++) {
           doc.text(i.toString(), cols[0], y + 4, { width: colW[0], align: "center" });
           
-          const record = records.find(r => parseInt(r.date.split("-")[2], 10) === i);
+          
+          let targetMonth = -1;
+          let targetYear = -1;
+          // In generateDTR and generateAllDTRs, period is available in the closure
+          const parsedDate = new Date(period);
+          if (!isNaN(parsedDate.getTime())) {
+            targetMonth = parsedDate.getMonth() + 1;
+            targetYear = parsedDate.getFullYear();
+          } else if (records.length > 0) {
+            const parts = records[0].date.split("-");
+            if (parts.length >= 2) {
+              targetYear = parseInt(parts[0], 10);
+              targetMonth = parseInt(parts[1], 10);
+            }
+          }
+          
+          const record = records.find(r => {
+            const parts = r.date.split("-");
+            if (parts.length < 3) return false;
+            const rYear = parseInt(parts[0], 10);
+            const rMonth = parseInt(parts[1], 10);
+            const rDay = parseInt(parts[2], 10);
+            
+            if (targetYear !== -1 && targetMonth !== -1) {
+              return rYear === targetYear && rMonth === targetMonth && rDay === i;
+            }
+            return rDay === i;
+          });
+
           if (record) {
             if (record.amIn) doc.text(record.amIn, cols[1], y + 4, { width: colW[1], align: "center" });
             if (record.amOut) doc.text(record.amOut, cols[2], y + 4, { width: colW[2], align: "center" });
