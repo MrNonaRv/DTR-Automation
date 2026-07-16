@@ -1,6 +1,9 @@
 @echo off
 TITLE DTR Automate
 
+:: Ensure we are in the directory where the script is located
+cd /d "%~dp0"
+
 echo ===================================================
 echo DTR Automate - Local Server Startup
 echo ===================================================
