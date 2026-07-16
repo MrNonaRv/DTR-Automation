@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { UploadCloud, File, AlertCircle, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UploadCloud, File, AlertCircle, Download, RefreshCw } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 
 export default function App() {
@@ -8,6 +8,40 @@ export default function App() {
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<string>('July 2026'); // Default or input
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const res = await fetch('/api/check-update');
+        const data = await res.json();
+        if (data.updateAvailable) {
+          setUpdateAvailable(true);
+        }
+      } catch (e) {
+        console.error("Failed to check for updates");
+      }
+    };
+    
+    // Check on mount and every hour
+    checkUpdate();
+    const interval = setInterval(checkUpdate, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      await fetch('/api/do-update', { method: 'POST' });
+      alert("System is updating and will restart in the background. Please wait a few seconds and refresh the page manually.");
+      setUpdateAvailable(false);
+    } catch (e) {
+      alert("Failed to initiate update.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -127,6 +161,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans text-gray-900">
       <div className="max-w-4xl mx-auto space-y-8">
+        
+        {/* Update Banner */}
+        {updateAvailable && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8 flex items-center justify-between">
+            <div className="flex items-center">
+              <RefreshCw className="h-5 w-5 text-blue-600 mr-3" />
+              <div>
+                <h3 className="text-sm font-medium text-blue-800">System Update Available</h3>
+                <p className="text-sm text-blue-700 mt-1">A new version of the Mambusao DTR Automate system is available. Would you like to update?</p>
+              </div>
+            </div>
+            <button
+              onClick={handleUpdate}
+              disabled={isUpdating}
+              className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {isUpdating ? 'Updating...' : 'Update System'}
+            </button>
+          </div>
+        )}
+
         <div className="text-center">
           <h1 className="text-3xl font-medium tracking-tight text-gray-900">Mambusao DTR Automate</h1>
           <p className="mt-2 text-sm text-gray-500">Upload biometric Excel logs to parse and generate DTRs.</p>
