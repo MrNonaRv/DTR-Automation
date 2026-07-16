@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
+import { DTREditor } from './components/DTREditor';
 
+
+const toTitleCase = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\w\S*/g, (txt) => {
+    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+  });
+};
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [period, setPeriod] = useState<string>('July 2026'); // Default or input
   const [printRange, setPrintRange] = useState<'full' | '1-15' | '16-31'>('full');
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -44,6 +53,13 @@ export default function App() {
     }
   };
 
+  const handleReset = () => {
+    setFile(null);
+    setParsedData(null);
+    setError(null);
+    setCurrentIndex(0);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
@@ -74,7 +90,12 @@ export default function App() {
       }
 
       const result = await response.json();
-      setParsedData(result.data);
+      const formattedData = result.data.map((emp: EmployeeAttendance) => ({
+        ...emp,
+        employeeIdOrName: toTitleCase(emp.employeeIdOrName)
+      }));
+      setParsedData(formattedData);
+      setCurrentIndex(0);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
     } finally {
@@ -163,6 +184,19 @@ export default function App() {
     }
   };
 
+  const handleUpdateEmployee = React.useCallback((idx: number, updatedEmp: EmployeeAttendance) => {
+    setParsedData((prev) => {
+      if (!prev) return prev;
+      const newData = [...prev];
+      newData[idx] = updatedEmp;
+      return newData;
+    });
+  }, []);
+
+  const handleDownloadEmployeeDTR = React.useCallback((emp: EmployeeAttendance) => {
+    handleDownloadDTR(emp);
+  }, [period, printRange]);
+
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans text-gray-900 selection:bg-blue-100">
       {/* Header */}
@@ -211,6 +245,7 @@ export default function App() {
           <p className="mt-3 text-base text-gray-500">Upload biometric Excel logs to parse, validate, and generate Daily Time Records in seconds.</p>
         </div>
 
+        {!parsedData && (
         <div className="bg-white p-8 sm:p-12 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-12 hover:bg-gray-50 hover:border-blue-400 transition-all group">
             <div className="bg-gray-50 group-hover:bg-blue-50 p-4 rounded-full transition-colors mb-4">
@@ -266,7 +301,8 @@ export default function App() {
             </div>
           )}
         </div>
-
+        )}
+        
         {parsedData && (
           <div className="space-y-6">
             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
@@ -277,6 +313,9 @@ export default function App() {
                     <CheckCircle2 className="w-5 h-5 text-green-500 mr-2" />
                     Parsed Results
                   </h2>
+                  <button onClick={handleReset} className="mt-3 text-sm text-blue-600 hover:text-blue-800 underline font-medium">
+                    Upload a different file
+                  </button>
                   <p className="text-sm text-gray-500 mt-1">Found {parsedData.length} employees in the dataset.</p>
                 </div>
                 
@@ -316,56 +355,53 @@ export default function App() {
               </div>
             </div>
             
+            
+            <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 space-y-4 sm:space-y-0">
+              <button
+                onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentIndex === 0}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Previous
+              </button>
+              
+              <div className="flex-1 flex justify-center px-4 w-full">
+                <select
+                  value={currentIndex}
+                  onChange={(e) => setCurrentIndex(Number(e.target.value))}
+                  className="block w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
+                >
+                  {parsedData.map((emp, idx) => (
+                    <option key={idx} value={idx}>
+                      {idx + 1}. {emp.employeeIdOrName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => setCurrentIndex(prev => Math.min(parsedData.length - 1, prev + 1))}
+                disabled={currentIndex === parsedData.length - 1}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </button>
+            </div>
+
+
             <div className="grid grid-cols-1 gap-6">
-              {parsedData.map((emp, idx) => (
-                <div key={idx} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                  <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white">
-                    <div className="flex items-center space-x-3">
-                      <div className="bg-gray-100 p-2 rounded-full">
-                        <Users className="w-5 h-5 text-gray-600" />
-                      </div>
-                      <span className="font-semibold text-gray-900 text-lg">{emp.employeeIdOrName}</span>
-                    </div>
-                    <button
-                      onClick={() => handleDownloadDTR(emp)}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all shadow-sm"
-                    >
-                      <Download className="h-4 w-4 mr-2 text-gray-400" />
-                      Download DTR
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-100 text-sm font-mono">
-                      <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                        <tr>
-                          <th className="px-6 py-3 text-left font-medium">Date</th>
-                          <th className="px-6 py-3 text-left font-medium">AM In</th>
-                          <th className="px-6 py-3 text-left font-medium">AM Out</th>
-                          <th className="px-6 py-3 text-left font-medium">PM In</th>
-                          <th className="px-6 py-3 text-left font-medium">PM Out</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white text-gray-600">
-                        {emp.records.slice(0, 5).map((record, rIdx) => (
-                          <tr key={rIdx} className="hover:bg-gray-50/50">
-                            <td className="px-6 py-3 whitespace-nowrap text-gray-900 font-medium">{record.date}</td>
-                            <td className="px-6 py-3 whitespace-nowrap">{record.amIn || <span className="text-gray-300">-</span>}</td>
-                            <td className="px-6 py-3 whitespace-nowrap">{record.amOut || <span className="text-gray-300">-</span>}</td>
-                            <td className="px-6 py-3 whitespace-nowrap">{record.pmIn || <span className="text-gray-300">-</span>}</td>
-                            <td className="px-6 py-3 whitespace-nowrap">{record.pmOut || <span className="text-gray-300">-</span>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {emp.records.length > 5 && (
-                    <div className="px-6 py-3 bg-gray-50/50 border-t border-gray-100 text-xs text-gray-500 flex justify-between items-center font-sans">
-                      <span>Showing 5 of {emp.records.length} records.</span>
-                      <span className="flex items-center text-blue-600">View more in generated PDF <ChevronRight className="w-3 h-3 ml-1" /></span>
-                    </div>
-                  )}
-                </div>
-              ))}
+              {parsedData.length > 0 && (
+                <DTREditor
+                  key={currentIndex}
+                  index={currentIndex}
+                  employee={parsedData[currentIndex]}
+                  period={period}
+                  onUpdate={handleUpdateEmployee}
+                  onDownload={handleDownloadEmployeeDTR}
+                />
+              )}
             </div>
           </div>
         )}

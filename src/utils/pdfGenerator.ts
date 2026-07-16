@@ -14,8 +14,7 @@ export async function generateDTR(
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 20 });
-      doc.initForm();
-      const buffers: Buffer[] = [];
+            const buffers: Buffer[] = [];
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(buffers)));
       doc.on("error", reject);
@@ -148,10 +147,10 @@ export async function generateDTR(
           const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
 
           if (isDateInRange) {
-            doc.formText(`${fieldPrefix}_amIn`, cols[1], y + 1, colW[1], rowHeight - 2, { align: "center", value: amInVal });
-            doc.formText(`${fieldPrefix}_amOut`, cols[2], y + 1, colW[2], rowHeight - 2, { align: "center", value: amOutVal });
-            doc.formText(`${fieldPrefix}_pmIn`, cols[3], y + 1, colW[3], rowHeight - 2, { align: "center", value: pmInVal });
-            doc.formText(`${fieldPrefix}_pmOut`, cols[4], y + 1, colW[4], rowHeight - 2, { align: "center", value: pmOutVal });
+            doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
+            doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
+            doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
+            doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
           }
 
           y += rowHeight;
@@ -201,10 +200,10 @@ export async function generateDTR(
       }
 
       // Draw left DTR
-      drawDTR(25, 20, 265, employeeName, records);
+      drawDTR(25, 20, 265);
       
       // Draw right DTR
-      drawDTR(305, 20, 265, employeeName, records);
+      drawDTR(305, 20, 265);
 
       doc.end();
     } catch (error) {
@@ -221,8 +220,7 @@ export async function generateAllDTRs(
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 20 });
-      doc.initForm();
-      const buffers: Buffer[] = [];
+            const buffers: Buffer[] = [];
       doc.on("data", (chunk) => buffers.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(buffers)));
       doc.on("error", reject);
@@ -354,10 +352,10 @@ export async function generateAllDTRs(
           const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
 
           if (isDateInRange) {
-            doc.formText(`${fieldPrefix}_amIn`, cols[1], y + 1, colW[1], rowHeight - 2, { align: "center", value: amInVal });
-            doc.formText(`${fieldPrefix}_amOut`, cols[2], y + 1, colW[2], rowHeight - 2, { align: "center", value: amOutVal });
-            doc.formText(`${fieldPrefix}_pmIn`, cols[3], y + 1, colW[3], rowHeight - 2, { align: "center", value: pmInVal });
-            doc.formText(`${fieldPrefix}_pmOut`, cols[4], y + 1, colW[4], rowHeight - 2, { align: "center", value: pmOutVal });
+            doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
+            doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
+            doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
+            doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
           }
 
           y += rowHeight;

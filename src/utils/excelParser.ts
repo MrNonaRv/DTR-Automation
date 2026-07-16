@@ -98,26 +98,34 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
 
       for (const scan of validScans) {
         const hour = scan.getHours();
+        const timeVal = hour + scan.getMinutes() / 60;
         
-        // AM IN
-        if (hour >= 5 && hour < 12) {
-          if (!amIn || scan < amIn) amIn = scan;
+        // AM IN (04:00 to 10:59)
+        if (timeVal >= 4 && timeVal < 11) {
+          if (!amIn) amIn = scan;
         }
+        // PM OUT (15:00 to 23:59)
+        else if (timeVal >= 15 && timeVal < 24) {
+          pmOut = scan; // keep updating to the latest
+        }
+      }
 
-        // AM OUT
-        if (hour >= 11 && hour < 13) {
-          if (!amOut || scan > amOut) amOut = scan;
-        }
+      // Middle scans (11:00 to 14:59)
+      const midScans = validScans.filter(s => {
+        const t = s.getHours() + s.getMinutes() / 60;
+        return t >= 11 && t < 15;
+      });
 
-        // PM IN
-        if (hour >= 12 && hour < 14) {
-          if (!pmIn || scan < pmIn) pmIn = scan;
+      if (midScans.length === 1) {
+        const t = midScans[0].getHours() + midScans[0].getMinutes() / 60;
+        if (t < 12.5) {
+          amOut = midScans[0];
+        } else {
+          pmIn = midScans[0];
         }
-
-        // PM OUT
-        if (hour >= 15 && hour < 24) {
-          if (!pmOut || scan > pmOut) pmOut = scan;
-        }
+      } else if (midScans.length >= 2) {
+        amOut = midScans[0];
+        pmIn = midScans[midScans.length - 1];
       }
 
       records.push({
