@@ -15,7 +15,7 @@ export interface EmployeeAttendance {
 }
 
 export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
-  const workbook = xlsx.read(fileBuffer, { type: "buffer" });
+  const workbook = xlsx.read(fileBuffer, { type: "buffer", cellDates: true });
   const allEmployeesAttendance: EmployeeAttendance[] = [];
 
   for (const sheetName of workbook.SheetNames) {
@@ -37,19 +37,14 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
       // Excel date serial number to JS Date if it comes as number
       let dateObj: Date | null = null;
 
-      if (typeof valB === 'number') {
-        // Excel serial date to JS Date
-        // 25569 is the difference in days between Excel epoch (1900-01-01) and Unix epoch (1970-01-01)
-        const unixTimestamp = (valB - 25569) * 86400 * 1000; 
-        
-        // This is a naive conversion, it might need tz offset adjustment depending on how it's written
-        // A safer way if it's purely a number and read properly by XLSX:
-        // xlsx library has cell.w or cell.v which might be better, but we read as array here.
-        // Let's use xlsx standard cell processing if possible.
-        // Or simply:
-        dateObj = new Date(Math.round(unixTimestamp));
+      if (valB instanceof Date) {
+        // xlsx cellDates: true returns UTC dates where the UTC time is the face value time.
+        // Shift it to local time so that getHours() returns the face value hour
+        dateObj = new Date(valB.getUTCFullYear(), valB.getUTCMonth(), valB.getUTCDate(), valB.getUTCHours(), valB.getUTCMinutes(), valB.getUTCSeconds());
+      } else if (typeof valB === 'number') {
+        const utcDate = new Date(Math.round((valB - 25569) * 86400 * 1000));
+        dateObj = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate(), utcDate.getUTCHours(), utcDate.getUTCMinutes(), utcDate.getUTCSeconds());
       } else if (typeof valB === 'string') {
-        // e.g., '2026-07-01 12:20:32'
         dateObj = new Date(valB);
       }
       

@@ -1,10 +1,70 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/utils/excelParser.ts', 'utf8');
 
-// replace HH:mm with h:mm a
-content = content.replace(/format\(amIn, "HH:mm"\)/g, 'format(amIn, "h:mm a")');
-content = content.replace(/format\(amOut, "HH:mm"\)/g, 'format(amOut, "h:mm a")');
-content = content.replace(/format\(pmIn, "HH:mm"\)/g, 'format(pmIn, "h:mm a")');
-content = content.replace(/format\(pmOut, "HH:mm"\)/g, 'format(pmOut, "h:mm a")');
+function fixFile(filePath) {
+  let content = fs.readFileSync(filePath, 'utf8');
 
-fs.writeFileSync('src/utils/excelParser.ts', content);
+  const oldParseDatText = `  const parseDatText = (text: string) => {
+    const lines = text.split(/\\r?\\n/).filter(l => l.trim().length > 0);
+    const records = [];
+    for (const line of lines) {
+      const parts = line.split('\\t');
+      if (parts.length < 2) continue;
+      const userId = parseInt(parts[0], 10);
+      const dt = parseDateTimeString(parts[1].trim());
+      if (!isNaN(userId) && dt) records.push({ userId, dt });
+    }
+    return records;
+  };`;
+  
+  const oldParseDatTextJS = `  function parseDatText(text){
+    const lines = text.split(/\\r?\\n/).filter(l => l.trim().length > 0);
+    const records = [];
+    for(const line of lines){
+      const parts = line.split('\\t');
+      if(parts.length < 2) continue;
+      const userId = parseInt(parts[0], 10);
+      const dt = parseDateTimeString(parts[1].trim());
+      if(!isNaN(userId) && dt) records.push({ userId, dt });
+    }
+    return records;
+  }`;
+
+  const newParseDatText = `  const parseDatText = (text: string) => {
+    const lines = text.split(/\\r?\\n/).filter(l => l.trim().length > 0);
+    const records = [];
+    for (const line of lines) {
+      const parts = line.trim().split(/\\s+/);
+      if (parts.length < 3) continue;
+      const userId = parseInt(parts[0], 10);
+      const dt = parseDateTimeString(parts[1] + ' ' + parts[2]);
+      if (!isNaN(userId) && dt) records.push({ userId, dt });
+    }
+    return records;
+  };`;
+
+  const newParseDatTextJS = `  function parseDatText(text){
+    const lines = text.split(/\\r?\\n/).filter(l => l.trim().length > 0);
+    const records = [];
+    for(const line of lines){
+      const parts = line.trim().split(/\\s+/);
+      if(parts.length < 3) continue;
+      const userId = parseInt(parts[0], 10);
+      const dt = parseDateTimeString(parts[1] + ' ' + parts[2]);
+      if(!isNaN(userId) && dt) records.push({ userId, dt });
+    }
+    return records;
+  }`;
+
+  if (content.includes("split('\\t')")) {
+      if (filePath.endsWith('.tsx')) {
+         content = content.replace(oldParseDatText, newParseDatText);
+      } else {
+         content = content.replace(oldParseDatTextJS, newParseDatTextJS);
+      }
+      fs.writeFileSync(filePath, content);
+      console.log('Fixed', filePath);
+  }
+}
+
+fixFile('src/components/ScannerTool.tsx');
+fixFile('public/scanner.html');

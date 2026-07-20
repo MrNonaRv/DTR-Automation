@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Attendance System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --paper:#EDE7D9;
+    --card:#FBF9F3;
+    --ink:#26312C;
+    --ink-soft:#5B6560;
+    --rule:#CBC2AC;
+    --rule-soft:#DED6C0;
+    --teal:#1F5C56;
+    --teal-dark:#153F3B;
+    --brass:#A8842C;
+    --brick:#93392C;
+    --brick-soft:#F3E3DE;
+    --green:#2E6B4F;
+    --green-soft:#E4EFE7;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image: radial-gradient(circle at 1px 1px, rgba(38,49,44,0.05) 1px, transparent 0);
+    background-size: 22px 22px;
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:960px;margin:0 auto;}
+
+  header{margin-bottom:22px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--brass); margin-bottom:6px;
+  }
+  h1{
+    font-family:'Roboto Slab', serif; font-weight:700; font-size:29px;
+    margin:0 0 4px; color:var(--teal-dark); letter-spacing:-0.01em;
+  }
+  .sub{color:var(--ink-soft); font-size:14.5px;}
+
+  /* Top nav */
+  .nav{display:flex; gap:6px; margin-top:22px; align-items:flex-end;}
+  .nav-btn{
+    font-family:'Roboto Slab', serif; font-weight:600; font-size:14px;
+    padding:11px 20px 13px; background:#DFD6BC; color:var(--ink-soft);
+    border:1px solid var(--rule); border-bottom:none;
+    border-radius:8px 8px 0 0; cursor:pointer; position:relative; top:1px;
+  }
+  .nav-btn:hover{background:#E7DFC8; color:var(--ink);}
+  .nav-btn.active{background:var(--card); color:var(--teal-dark); box-shadow:0 -2px 6px rgba(38,49,44,0.05);}
+  .nav-btn .count{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); margin-left:7px;}
+
+  .card{
+    background:var(--card); border:1px solid var(--rule); border-radius:0 10px 10px 10px;
+    box-shadow:0 8px 24px rgba(38,49,44,0.08); overflow:hidden;
+  }
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* ---- roster panel ---- */
+  .toolbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px; border-bottom:1px solid var(--rule-soft); gap:12px; flex-wrap:wrap;
+  }
+  .toolbar-left{display:flex; align-items:center; gap:10px;}
+  .scanner-label-input{
+    font-family:'Roboto Slab', serif; font-weight:600; font-size:16px; color:var(--teal-dark);
+    background:transparent; border:none; border-bottom:1px dashed transparent; padding:2px 2px; max-width:240px;
+  }
+  .scanner-label-input:hover, .scanner-label-input:focus{border-bottom:1px dashed var(--rule); outline:none;}
+
+  .btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:13px; border-radius:6px;
+    padding:9px 14px; border:1px solid transparent; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:transform .08s ease, box-shadow .12s ease, opacity .12s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+  .btn-primary{background:var(--teal); color:#fff;}
+  .btn-primary:hover:not(:disabled){background:var(--teal-dark);}
+  .btn-ghost{background:transparent; color:var(--teal-dark); border-color:var(--rule);}
+  .btn-ghost:hover:not(:disabled){background:#F1ECDE;}
+  .toolbar-right{display:flex; gap:8px; align-items:center;}
+
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left; font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft);
+    padding:10px 20px; border-bottom:1px solid var(--rule-soft); background:#F5F1E6;
+  }
+  th.col-no{width:60px;} th.col-actions{width:56px; text-align:center;}
+  tbody tr{border-bottom:1px solid var(--rule-soft);}
+  tbody tr:hover{background:#F7F4EA;}
+  tbody tr:last-child{border-bottom:none;}
+  td{padding:6px 20px; vertical-align:middle;}
+  td.no-cell{font-family:'IBM Plex Mono', monospace; color:var(--ink-soft); font-size:13px;}
+
+  input.field{
+    width:100%; border:1px solid transparent; background:transparent;
+    font-family:'Inter', sans-serif; font-size:14px; color:var(--ink); padding:8px 8px; border-radius:5px;
+  }
+  input.field:hover{border-color:var(--rule-soft);}
+  input.field:focus{outline:none; border-color:var(--teal); background:#fff;}
+  input.field::placeholder{color:#B7AF98;}
+
+  .del-btn{
+    width:28px; height:28px; border:none; background:transparent; color:var(--ink-soft);
+    cursor:pointer; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  }
+  .del-btn:hover{background:var(--brick-soft); color:var(--brick);}
+
+  .empty-state{padding:48px 20px; text-align:center; color:var(--ink-soft);}
+  .empty-state .stamp{font-family:'Roboto Slab', serif; font-size:15px; color:var(--teal-dark); margin-bottom:6px;}
+
+  footer.bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; border-top:1px solid var(--rule-soft); background:#F5F1E6;
+  }
+  .status{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .status .dot{width:7px; height:7px; border-radius:50%; background:var(--teal);}
+  .status.unsaved .dot{background:var(--brass);}
+
+  /* ---- convert panel ---- */
+  .convert-body{padding:24px 24px 8px;}
+  .field-row{margin-bottom:20px;}
+  .field-label{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink-soft); margin-bottom:8px; display:block;
+  }
+  .scanner-choice{display:flex; gap:10px;}
+  .choice-btn{
+    flex:1; padding:12px 14px; border:1px solid var(--rule); border-radius:8px;
+    background:#fff; cursor:pointer; font-family:'Inter', sans-serif; font-weight:600; font-size:14px;
+    color:var(--ink-soft); text-align:left; transition:border-color .12s ease, background .12s ease;
+  }
+  .choice-btn .fname{
+    display:block; font-family:'IBM Plex Mono', monospace; font-weight:500; font-size:11.5px;
+    color:var(--ink-soft); margin-top:2px;
+  }
+  .choice-btn.selected{border-color:var(--teal); background:var(--green-soft); color:var(--teal-dark);}
+
+  .dropzone{
+    border:2px dashed var(--rule); border-radius:10px; padding:32px 20px; text-align:center;
+    cursor:pointer; background:#F9F6EC; transition:border-color .12s ease, background .12s ease;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--teal); background:var(--green-soft);}
+  .dropzone .dz-title{font-family:'Roboto Slab', serif; font-weight:600; color:var(--teal-dark); font-size:15px; margin-bottom:4px;}
+  .dropzone .dz-sub{font-size:12.5px; color:var(--ink-soft);}
+  .file-chip{
+    display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--rule);
+    border-radius:7px; padding:8px 12px; font-size:13px; font-family:'IBM Plex Mono', monospace; color:var(--ink);
+  }
+  .file-chip button{border:none; background:transparent; color:var(--brick); cursor:pointer; font-size:14px; padding:0;}
+
+  .log-box{
+    background:#F5F1E6; border:1px solid var(--rule-soft); border-radius:8px; padding:14px 16px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink-soft); line-height:1.7;
+    display:none; margin-top:16px;
+  }
+  .log-box.show{display:block;}
+  .log-box .ok{color:var(--green);}
+  .log-box .warn{color:var(--brass);}
+
+  .convert-footer{
+    padding:16px 24px 24px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--teal-dark); color:#fff; padding:10px 18px; border-radius:7px;
+    font-size:13.5px; font-family:'Inter', sans-serif; opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease; box-shadow:0 8px 20px rgba(0,0,0,0.2); z-index:50;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:560px){
+    td, th{padding:8px 12px;}
+    .toolbar{flex-direction:column; align-items:stretch;}
+    .scanner-choice{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Department Biometric Records</div>
+    <h1>Attendance System</h1>
+    <div class="sub">Manage scanner rosters and convert attendance exports into named per-user workbooks.</div>
+  </header>
+
+  <div class="nav" id="nav"></div>
+  <div class="card">
+
+    <!-- Roster panels (scanner1 / scanner2) -->
+    <div class="panel" id="panel-scanner1">
+      <div class="toolbar">
+        <div class="toolbar-left"><input class="scanner-label-input" id="label-scanner1" spellcheck="false"></div>
+        <div class="toolbar-right">
+          <button class="btn btn-ghost" data-export="scanner1">Export list (.xlsx)</button>
+          <button class="btn btn-primary" data-add="scanner1">+ Add person</button>
+        </div>
+      </div>
+      <table id="table-scanner1" style="display:none;">
+        <thead><tr><th class="col-no">No.</th><th>Name</th><th>Department / Office</th><th class="col-actions"></th></tr></thead>
+        <tbody id="body-scanner1"></tbody>
+      </table>
+      <div class="empty-state" id="empty-scanner1"><div class="stamp">This scanner's list is empty</div><div>Add the first person to start the roster.</div></div>
+      <footer class="bar">
+        <div class="status" id="status-scanner1"><span class="dot"></span><span class="status-text">All changes saved</span></div>
+        <button class="btn btn-ghost" data-save="scanner1">Save now</button>
+      </footer>
+    </div>
+
+    <div class="panel" id="panel-scanner2">
+      <div class="toolbar">
+        <div class="toolbar-left"><input class="scanner-label-input" id="label-scanner2" spellcheck="false"></div>
+        <div class="toolbar-right">
+          <button class="btn btn-ghost" data-export="scanner2">Export list (.xlsx)</button>
+          <button class="btn btn-primary" data-add="scanner2">+ Add person</button>
+        </div>
+      </div>
+      <table id="table-scanner2" style="display:none;">
+        <thead><tr><th class="col-no">No.</th><th>Name</th><th>Department / Office</th><th class="col-actions"></th></tr></thead>
+        <tbody id="body-scanner2"></tbody>
+      </table>
+      <div class="empty-state" id="empty-scanner2"><div class="stamp">This scanner's list is empty</div><div>Add the first person to start the roster.</div></div>
+      <footer class="bar">
+        <div class="status" id="status-scanner2"><span class="dot"></span><span class="status-text">All changes saved</span></div>
+        <button class="btn btn-ghost" data-save="scanner2">Save now</button>
+      </footer>
+    </div>
+
+    <!-- Convert panel -->
+    <div class="panel" id="panel-convert">
+      <div class="convert-body">
+
+        <div class="field-row">
+          <span class="field-label">1 — Which scanner is this file from?</span>
+          <div class="scanner-choice" id="scannerChoice"></div>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label">2 — Upload the file</span>
+          <div class="dropzone" id="dropzone">
+            <div class="dz-title" id="dzTitle">Drop a .dat or .xlsx file here, or click to browse</div>
+            <div class="dz-sub">Raw scanner export (.dat) or a previously-saved per-user workbook (.xlsx)</div>
+            <input type="file" id="fileInput" accept=".dat,.xlsx" style="display:none;">
+          </div>
+        </div>
+
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+      <div class="convert-footer">
+        <button class="btn btn-primary" id="convertBtn" disabled>Convert &amp; build workbook</button>
+        <button class="btn btn-ghost" id="downloadBtn" style="display:none;">Download <span id="downloadName"></span></button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const SCANNER_KEYS = ['scanner1', 'scanner2'];
+  const DEFAULT_LABELS = { scanner1: 'Scanner 1', scanner2: 'Scanner 2' };
+  const OUTPUT_FILENAMES = { scanner1: '1_attlog.xlsx', scanner2: '2_attlog.xlsx' };
+
+  let activePage = 'scanner1'; // scanner1 | scanner2 | convert
+  let data = {
+    scanner1: { label: 'Scanner 1', people: [] },
+    scanner2: { label: 'Scanner 2', people: [] }
+  };
+  let saveTimers = {};
+  let selectedScanner = 'scanner1';
+  let uploadedFile = null;
+  let builtWorkbookBuffer = null;
+  let builtFilename = null;
+
+  const navEl = document.getElementById('nav');
+  const toastEl = document.getElementById('toast');
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toastEl.classList.remove('show'), 1900);
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+
+  /* ================= NAV ================= */
+  function renderNav(){
+    navEl.innerHTML = '';
+    const items = [
+      { key: 'scanner1', label: data.scanner1.label, count: data.scanner1.people.length },
+      { key: 'scanner2', label: data.scanner2.label, count: data.scanner2.people.length },
+      { key: 'convert', label: 'Convert File', count: null }
+    ];
+    items.forEach(it => {
+      const btn = document.createElement('div');
+      btn.className = 'nav-btn' + (activePage === it.key ? ' active' : '');
+      btn.innerHTML = escapeHtml(it.label) + (it.count !== null ? \`<span class="count">\${it.count}</span>\` : '');
+      btn.addEventListener('click', () => { activePage = it.key; renderNav(); renderPages(); });
+      navEl.appendChild(btn);
+    });
+  }
+
+  function renderPages(){
+    document.getElementById('panel-scanner1').classList.toggle('active', activePage === 'scanner1');
+    document.getElementById('panel-scanner2').classList.toggle('active', activePage === 'scanner2');
+    document.getElementById('panel-convert').classList.toggle('active', activePage === 'convert');
+    if(activePage === 'convert') renderScannerChoice();
+  }
+
+  /* ================= ROSTER (per scanner) ================= */
+  function uid(){ return 'p' + Math.random().toString(36).slice(2, 10); }
+
+  function markUnsaved(key){
+    const statusEl = document.getElementById('status-' + key);
+    statusEl.classList.add('unsaved');
+    statusEl.querySelector('.status-text').textContent = 'Unsaved changes';
+    clearTimeout(saveTimers[key]);
+    saveTimers[key] = setTimeout(() => persist(key), 900);
+  }
+  function markSaved(key){
+    const statusEl = document.getElementById('status-' + key);
+    statusEl.classList.remove('unsaved');
+    statusEl.querySelector('.status-text').textContent = 'All changes saved';
+  }
+
+  async function persist(key){
+    try{
+      localStorage.setItem('attendance-system:' + key, JSON.stringify(data[key]));
+      markSaved(key);
+    }catch(e){
+      document.getElementById('status-' + key).querySelector('.status-text').textContent = 'Save failed — try again';
+      console.error('Storage error:', e);
+    }
+  }
+
+  async function loadAll(){
+    for(const key of SCANNER_KEYS){
+      try{
+        const val = localStorage.getItem('attendance-system:' + key);
+        if(val){
+          const parsed = JSON.parse(val);
+          data[key] = { label: parsed.label || DEFAULT_LABELS[key], people: Array.isArray(parsed.people) ? parsed.people : [] };
+        }
+      }catch(e){ /* not found yet, keep default */ }
+    }
+    renderNav();
+    renderRoster('scanner1');
+    renderRoster('scanner2');
+  }
+
+  function renderRoster(key){
+    const scanner = data[key];
+    document.getElementById('label-' + key).value = scanner.label;
+
+    const bodyEl = document.getElementById('body-' + key);
+    const tableEl = document.getElementById('table-' + key);
+    const emptyEl = document.getElementById('empty-' + key);
+
+    bodyEl.innerHTML = '';
+    if(scanner.people.length === 0){
+      tableEl.style.display = 'none';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    tableEl.style.display = 'table';
+    emptyEl.style.display = 'none';
+
+    scanner.people.forEach((person, idx) => {
+      const tr = document.createElement('tr');
+
+      const tdNo = document.createElement('td');
+      tdNo.className = 'no-cell';
+      tdNo.textContent = idx + 1;
+      tr.appendChild(tdNo);
+
+      const tdName = document.createElement('td');
+      const nameInput = document.createElement('input');
+      nameInput.className = 'field';
+      nameInput.placeholder = 'Full name';
+      nameInput.value = person.name || '';
+      nameInput.addEventListener('input', () => { person.name = nameInput.value; markUnsaved(key); });
+      tdName.appendChild(nameInput);
+      tr.appendChild(tdName);
+
+      const tdDept = document.createElement('td');
+      const deptInput = document.createElement('input');
+      deptInput.className = 'field';
+      deptInput.placeholder = 'Department / Office';
+      deptInput.value = person.dept || '';
+      deptInput.addEventListener('input', () => { person.dept = deptInput.value; markUnsaved(key); });
+      tdDept.appendChild(deptInput);
+      tr.appendChild(tdDept);
+
+      const tdActions = document.createElement('td');
+      tdActions.style.textAlign = 'center';
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del-btn';
+      delBtn.title = 'Remove person';
+      delBtn.innerHTML = '&#10005;';
+      delBtn.addEventListener('click', () => {
+        scanner.people.splice(idx, 1);
+        markUnsaved(key);
+        renderNav();
+        renderRoster(key);
+      });
+      tdActions.appendChild(delBtn);
+      tr.appendChild(tdActions);
+
+      bodyEl.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-add');
+      data[key].people.push({ id: uid(), name: '', dept: '' });
+      markUnsaved(key);
+      renderNav();
+      renderRoster(key);
+      const bodyEl = document.getElementById('body-' + key);
+      const inputs = bodyEl.querySelectorAll('tr:last-child input.field');
+      if(inputs[0]) inputs[0].focus();
+    });
+  });
+
+  document.querySelectorAll('[data-save]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-save');
+      clearTimeout(saveTimers[key]);
+      persist(key);
+      showToast(data[key].label + ' roster saved');
+    });
+  });
+
+  document.querySelectorAll('.scanner-label-input').forEach(inputEl => {
+    inputEl.addEventListener('input', () => {
+      const key = inputEl.id.replace('label-', '');
+      data[key].label = inputEl.value || DEFAULT_LABELS[key];
+      renderNav();
+      markUnsaved(key);
+    });
+  });
+
+  document.querySelectorAll('[data-export]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.getAttribute('data-export');
+      const scanner = data[key];
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Biometric Record');
+      ws.columns = [{ header: 'No.', width: 6 }, { header: 'Name', width: 30 }, { header: 'Department/Office', width: 24 }];
+      scanner.people.forEach((p, idx) => ws.addRow([idx + 1, p.name || '', p.dept || '']));
+      const buffer = await wb.xlsx.writeBuffer();
+      const filename = (scanner.label || 'scanner').replace(/[^a-z0-9]+/gi, '_') + '_roster.xlsx';
+      downloadBuffer(buffer, filename);
+      showToast('Exported ' + filename);
+    });
+  });
+
+  function downloadBuffer(buffer, filename){
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  /* ================= CONVERT ================= */
+  function renderScannerChoice(){
+    const box = document.getElementById('scannerChoice');
+    box.innerHTML = '';
+    SCANNER_KEYS.forEach(key => {
+      const btn = document.createElement('div');
+      btn.className = 'choice-btn' + (selectedScanner === key ? ' selected' : '');
+      btn.innerHTML = \`\${escapeHtml(data[key].label)}<span class="fname">saves as \${OUTPUT_FILENAMES[key]}</span>\`;
+      btn.addEventListener('click', () => { selectedScanner = key; renderScannerChoice(); });
+      box.appendChild(btn);
+    });
+  }
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const dzTitle = document.getElementById('dzTitle');
+  const convertBtn = document.getElementById('convertBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const downloadNameEl = document.getElementById('downloadName');
+  const logBox = document.getElementById('logBox');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if(fileInput.files.length) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(file){
+    const lower = file.name.toLowerCase();
+    if(!lower.endsWith('.dat') && !lower.endsWith('.xlsx')){
+      showToast('Please choose a .dat or .xlsx file');
+      return;
+    }
+    uploadedFile = file;
+    dzTitle.textContent = file.name;
+    builtWorkbookBuffer = null;
+    downloadBtn.style.display = 'none';
+    logBox.classList.remove('show');
+    logBox.innerHTML = '';
+
+    // auto-detect scanner from filename prefix
+    if(/^1[_\-]/.test(file.name)) selectedScanner = 'scanner1';
+    else if(/^2[_\-]/.test(file.name)) selectedScanner = 'scanner2';
+    renderScannerChoice();
+
+    convertBtn.disabled = false;
+  }
+
+  function log(line, cls){
+    const div = document.createElement('div');
+    if(cls) div.className = cls;
+    div.textContent = line;
+    logBox.appendChild(div);
+    logBox.classList.add('show');
+  }
+
+  function cleanSheetName(name){
+    let n = String(name).replace(/[:\\\/\?\*\[\]]/g, '').trim();
+    if(n.length === 0) n = 'Sheet';
+    return n.slice(0, 31);
+  }
+
+  function parseDateTimeString(s){
+    let m = String(s).match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})/);
+    if(m){
+      const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], se = +m[6];
+      return new Date(y, mo - 1, d, h, mi, se);
+    }
+    m = String(s).match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})[ T](\d{1,2}):(\d{2}):(\d{2})/);
+    if(m){
+      const y = +m[3];
+      let mo = +m[1];
+      let d = +m[2];
+      if(mo > 12){ d = +m[1]; mo = +m[2]; }
+      const h = +m[4], mi = +m[5], se = +m[6];
+      return new Date(y, mo - 1, d, h, mi, se);
+    }
+    const dt = new Date(s);
+    if(!isNaN(dt.getTime())) return dt;
+    return null;
+  }
+
+  function parseDatText(text){
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const records = [];
+    for(const line of lines){
+      const parts = line.trim().split(/\s+/);
+      if(parts.length < 3) continue;
+      const userId = parseInt(parts[0], 10);
+      const dt = parseDateTimeString(parts[1] + ' ' + parts[2]);
+      if(!isNaN(userId) && dt) records.push({ userId, dt });
+    }
+    return records;
+  }
+
+  function buildSpecFromDat(records, people){
+    const byUser = new Map();
+    for(const r of records){
+      if(!byUser.has(r.userId)) byUser.set(r.userId, []);
+      byUser.get(r.userId).push(r.dt);
+    }
+    const userIds = Array.from(byUser.keys()).sort((a, b) => a - b);
+    let matched = 0, unmatched = 0;
+    const spec = userIds.map(uidNum => {
+      const times = byUser.get(uidNum).slice().sort((a, b) => a - b);
+      const person = people[uidNum - 1];
+      let name;
+      if(person && person.name && person.name.trim()){ name = person.name.trim(); matched++; }
+      else { name = \`User \${uidNum}\`; unmatched++; }
+      return { sheetName: name, records: times.map(dt => ({ userId: uidNum, dt })) };
+    });
+    return { spec, matched, unmatched, totalPunches: records.length };
+  }
+
+  async function parsePerUserWorkbook(arrayBuffer){
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(arrayBuffer);
+    const spec = [];
+    let totalPunches = 0;
+    wb.eachSheet(worksheet => {
+      const records = [];
+      worksheet.eachRow(row => {
+        const a = row.getCell(1).value;
+        const b = row.getCell(2).value;
+        if(a == null || b == null) return;
+        const userIdNum = typeof a === 'number' ? a : parseInt(a, 10);
+        let dt = b;
+        if(dt && typeof dt === 'object' && dt.result !== undefined) dt = dt.result;
+        if(!(dt instanceof Date)){
+          if(typeof dt === 'number'){ dt = new Date(Math.round((dt - 25569) * 86400 * 1000)); }
+          else if(typeof dt === 'string'){ const parsed = new Date(dt); if(!isNaN(parsed.getTime())) dt = parsed; else return; }
+          else return;
+        }
+        if(isNaN(userIdNum) || isNaN(dt.getTime())) return;
+        records.push({ userId: userIdNum, dt });
+      });
+      if(records.length > 0){
+        records.sort((x, y) => x.dt - y.dt);
+        spec.push({ sheetName: worksheet.name, records });
+        totalPunches += records.length;
+      }
+    });
+    return { spec, totalPunches };
+  }
+
+  async function buildWorkbookFromSpec(spec){
+    const wb = new ExcelJS.Workbook();
+    const usedNames = new Set();
+    for(const item of spec){
+      let base = cleanSheetName(item.sheetName);
+      let finalName = base, i = 2;
+      while(usedNames.has(finalName)){ finalName = cleanSheetName(\`\${base} (\${i})\`); i++; }
+      usedNames.add(finalName);
+
+      const ws = wb.addWorksheet(finalName);
+      ws.columns = [{ width: 8 }, { width: 22 }];
+      item.records.forEach(rec => {
+        const row = ws.addRow([rec.userId, rec.dt]);
+        const c1 = row.getCell(1), c2 = row.getCell(2);
+        c1.font = { name: 'Arial', size: 11 };
+        c1.alignment = { horizontal: 'center' };
+        c2.font = { name: 'Arial', size: 11 };
+        c2.alignment = { horizontal: 'center' };
+        c2.numFmt = 'm/d/yyyy h:mm';
+      });
+    }
+    return wb.xlsx.writeBuffer();
+  }
+
+  convertBtn.addEventListener('click', async () => {
+    if(!uploadedFile) return;
+    convertBtn.disabled = true;
+    convertBtn.textContent = 'Converting…';
+    logBox.innerHTML = '';
+    logBox.classList.remove('show');
+
+    try{
+      const lower = uploadedFile.name.toLowerCase();
+      let spec, summaryLines = [];
+
+      if(lower.endsWith('.dat')){
+        const text = await uploadedFile.text();
+        const records = parseDatText(text);
+        if(records.length === 0){ throw new Error('No valid records found in the .dat file.'); }
+        const people = data[selectedScanner].people;
+        const result = buildSpecFromDat(records, people);
+        spec = result.spec;
+        log(\`Parsed \${result.totalPunches} punches across \${spec.length} users.\`, 'ok');
+        log(\`Matched \${result.matched} names from \${data[selectedScanner].label} roster.\`, result.matched > 0 ? 'ok' : 'warn');
+        if(result.unmatched > 0) log(\`\${result.unmatched} user(s) had no roster match — labeled "User {number}".\`, 'warn');
+      } else if(lower.endsWith('.xlsx')){
+        const buf = await uploadedFile.arrayBuffer();
+        const result = await parsePerUserWorkbook(buf);
+        if(result.spec.length === 0){ throw new Error('No per-user sheets with UserID/DateTime found in this workbook.'); }
+        spec = result.spec;
+        log(\`Read \${result.totalPunches} punches across \${spec.length} existing sheets.\`, 'ok');
+        log('Sheet names kept as-is — no re-matching against the roster.', 'ok');
+      } else {
+        throw new Error('Unsupported file type.');
+      }
+
+      const buffer = await buildWorkbookFromSpec(spec);
+      builtWorkbookBuffer = buffer;
+      builtFilename = OUTPUT_FILENAMES[selectedScanner];
+      log(\`Workbook ready: \${builtFilename}\`, 'ok');
+
+      downloadNameEl.textContent = builtFilename;
+      downloadBtn.style.display = 'inline-flex';
+      showToast('Conversion complete');
+    }catch(err){
+      log('Error: ' + err.message, 'warn');
+      console.error(err);
+      showToast('Conversion failed — see log');
+    }finally{
+      convertBtn.disabled = false;
+      convertBtn.textContent = 'Convert & build workbook';
+    }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    if(!builtWorkbookBuffer) return;
+    downloadBuffer(builtWorkbookBuffer, builtFilename);
+  });
+
+  loadAll().then(() => { renderPages(); });
+})();
+</script>
+</body>
+</html>

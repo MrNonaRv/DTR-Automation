@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
+import { ScannerTool } from './components/ScannerTool';
 
 
 const toTitleCase = (str: string) => {
@@ -20,6 +21,7 @@ export default function App() {
   const [printRange, setPrintRange] = useState<'full' | '1-15' | '16-31'>('full');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showScannerTool, setShowScannerTool] = useState(false);
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -85,8 +87,20 @@ export default function App() {
         body: formData,
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        let errMsg = 'Expected JSON but got HTML. ';
+        if (text.includes('<!DOCTYPE') || text.includes('<!doctype')) {
+            errMsg += 'The server returned an HTML page (possibly a redirect or an unhandled proxy error). ';
+        }
+        errMsg += `Status: ${response.status}. ${text.substring(0, 50)}`;
+        throw new Error(errMsg);
+      }
+
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || errJson.details || 'Upload failed');
       }
 
       const result = await response.json();
@@ -119,7 +133,17 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate DTR');
+        const text = await response.text();
+        throw new Error('Failed to generate DTR: ' + text.substring(0, 100));
+      }
+      
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+         const errJson = await response.json();
+         throw new Error(errJson.error || 'Failed to generate DTR');
+      }
+      if (!contentType || !contentType.includes("application/pdf")) {
+         throw new Error('Expected PDF but got: ' + contentType);
       }
 
       // Create a blob from the PDF stream
@@ -200,16 +224,22 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans text-gray-900 selection:bg-blue-100">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Calendar className="h-5 w-5 text-white" />
+            <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-xl shadow-sm text-white">
+              <Calendar className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight text-gray-900">DTR Automate</h1>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">DTR Automate</h1>
           </div>
-          <div className="flex items-center space-x-4 text-sm text-gray-500 font-medium">
-            <span className="flex items-center"><Activity className="w-4 h-4 mr-1.5" /> System Active</span>
+          <div className="flex items-center space-x-4">
+            <button onClick={() => setShowScannerTool(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200">
+              <Users className="w-4 h-4 mr-2" /> Scanner Tool
+            </button>
+            <div className="hidden sm:flex items-center text-xs font-medium text-gray-500 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-200">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
+              System Active
+            </div>
           </div>
         </div>
       </header>
@@ -240,67 +270,97 @@ export default function App() {
           </div>
         )}
 
-        <div className="text-center max-w-2xl mx-auto mb-8">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Streamline your attendance</h2>
-          <p className="mt-3 text-base text-gray-500">Upload biometric Excel logs to parse, validate, and generate Daily Time Records in seconds.</p>
-        </div>
-
         {!parsedData && (
-        <div className="bg-white p-8 sm:p-12 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-12 hover:bg-gray-50 hover:border-blue-400 transition-all group">
-            <div className="bg-gray-50 group-hover:bg-blue-50 p-4 rounded-full transition-colors mb-4">
-              <UploadCloud className="h-10 w-10 text-gray-400 group-hover:text-blue-500 transition-colors" />
+          <div className="max-w-4xl mx-auto space-y-8 mt-4">
+            <div className="text-center space-y-4">
+              <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Simplify Your DTR Generation</h2>
+              <p className="text-gray-500 max-w-2xl mx-auto text-lg">Convert raw biometric logs to polished PDF Daily Time Records in seconds. Manage employee rosters, parse attendance, and generate reports.</p>
             </div>
-            <div className="flex flex-col items-center text-sm text-gray-600">
-              <label
-                htmlFor="file-upload"
-                className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-              >
-                <span className="text-base">Click to upload</span>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
+                <div>
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-emerald-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
+                  <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-6">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">1. Prepare Data</h3>
+                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Convert raw .dat files from your biometric scanner into clean Excel workbooks organized by employee name.</p>
+                </div>
+                <button 
+                  onClick={() => setShowScannerTool(true)}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-teal-200 text-teal-700 bg-teal-50 rounded-lg hover:bg-teal-100 font-medium text-sm transition-colors w-full"
+                >
+                  Open Scanner Tool <ChevronRight className="w-4 h-4 ml-2" />
+                </button>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
+                <div>
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
+                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-6">
+                    <File className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">2. Generate DTR</h3>
+                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
+                </div>
+                <label 
+                  htmlFor="file-upload-direct"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors w-full cursor-pointer"
+                >
+                  <UploadCloud className="w-4 h-4 mr-2" /> Upload Excel File
+                </label>
                 <input
-                  id="file-upload"
-                  name="file-upload"
+                  id="file-upload-direct"
                   type="file"
                   className="sr-only"
                   accept=".xlsx, .xls"
                   onChange={handleFileChange}
                 />
-              </label>
-              <p className="mt-1">or drag and drop your Excel file here</p>
-            </div>
-            <p className="text-xs text-gray-400 mt-4 font-mono">.xlsx or .xls up to 10MB</p>
-          </div>
+              </div>
 
-          {file && (
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="flex items-center space-x-3 mb-4 sm:mb-0">
-                <div className="bg-white p-2 rounded-lg shadow-sm">
-                  <File className="h-6 w-6 text-blue-500" />
+            </div>
+
+            {file && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col sm:flex-row items-center justify-between animate-in fade-in slide-in-from-bottom-4">
+                <div className="flex items-center space-x-4 mb-4 sm:mb-0">
+                  <div className="bg-blue-50 p-3 rounded-xl">
+                    <File className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">{file.name}</h4>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="block text-sm font-semibold text-gray-900">{file.name}</span>
-                  <span className="block text-xs text-gray-500 font-mono">{(file.size / 1024).toFixed(1)} KB</span>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={() => setFile(null)}
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    {isUploading ? (
+                      <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+                    ) : 'Process DTR Data'}
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-gray-900"
-              >
-                {isUploading ? (
-                  <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Parsing Data...</>
-                ) : 'Process File'}
-              </button>
-            </div>
-          )}
+            )}
+            
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-800">
+                <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
+                <p className="text-sm font-medium">{error}</p>
+              </div>
+            )}
 
-          {error && (
-            <div className="mt-6 p-4 bg-red-50/50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-800">
-              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
-              <p className="text-sm font-medium">{error}</p>
-            </div>
-          )}
-        </div>
+          </div>
         )}
         
         {parsedData && (
@@ -406,6 +466,7 @@ export default function App() {
           </div>
         )}
       </main>
+      {showScannerTool && <ScannerTool onClose={() => setShowScannerTool(false)} />}
     </div>
   );
 }
