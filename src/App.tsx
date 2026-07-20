@@ -230,7 +230,10 @@ export default function App() {
             <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2 rounded-xl shadow-sm text-white">
               <Calendar className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">DTR Automate</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900 leading-none">DTR Automate</h1>
+              <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">By Ralph Anthony O. Olano</span>
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             <button onClick={() => setShowScannerTool(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200">
