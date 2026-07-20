@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
-import { parseBiometricLogs } from '../src/utils/excelParser';
-import { generateDTR, generateAllDTRs } from '../src/utils/pdfGenerator';
+import { parseBiometricLogs } from '../src/utils/excelParser.js';
+import { generateDTR, generateAllDTRs } from '../src/utils/pdfGenerator.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();

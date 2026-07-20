@@ -1,12 +1,12 @@
 {
   "functions": {
-    "api/**/*.ts": {
+    "api/**/*": {
       "includeFiles": "Systemlogo.jpg",
       "memory": 1024,
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.ts" }
+    { "source": "/api/(.*)", "destination": "/api/index" }
   ]
 }

@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
-import { AttendanceRecord } from "./excelParser";
+import { AttendanceRecord } from "./excelParser.js";
 
 
 
@@ -19,7 +19,7 @@ export async function generateDTR(
       doc.on("end", () => resolve(Buffer.concat(buffers)));
       doc.on("error", reject);
 
-      function drawDTR(startX: number, startY: number, width: number) {
+      const drawDTR = (startX: number, startY: number, width: number) => {
         let y = startY;
         const leftX = startX;
         const rightX = startX + width;
@@ -225,7 +225,7 @@ export async function generateAllDTRs(
       doc.on("end", () => resolve(Buffer.concat(buffers)));
       doc.on("error", reject);
 
-      function drawDTR(startX: number, startY: number, width: number, employeeName: string, records: AttendanceRecord[]) {
+      const drawDTR = (startX: number, startY: number, width: number, employeeName: string, records: AttendanceRecord[]) => {
         let y = startY;
         const leftX = startX;
         const rightX = startX + width;
