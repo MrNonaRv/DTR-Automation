@@ -107,6 +107,54 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
     });
   };
 
+
+  const fileInputRefs = {
+    scanner1: useRef<HTMLInputElement>(null),
+    scanner2: useRef<HTMLInputElement>(null)
+  };
+
+  const handleImportList = (key: ScannerKey) => {
+    fileInputRefs[key].current?.click();
+  };
+
+  const onImportFileSelected = async (key: ScannerKey, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const ws = wb.worksheets[0];
+      if (!ws) {
+        alert('No worksheet found in the file.');
+        return;
+      }
+
+      const newPeople: Person[] = [];
+      ws.eachRow((row, rowNumber) => {
+        const noVal = String(row.getCell(1).value || '').trim();
+        // Skip header
+        if (rowNumber === 1 && noVal.toLowerCase() === 'no.') return;
+
+        const name = String(row.getCell(2).value || '');
+        const dept = String(row.getCell(3).value || '');
+        newPeople.push({ id: Math.random().toString(36).slice(2, 10), name: name.trim(), dept: dept.trim() });
+      });
+
+      setData(prev => ({
+        ...prev,
+        [key]: { ...prev[key], people: newPeople }
+      }));
+      markUnsaved(key);
+      alert(`${data[key].label} list imported from ${file.name}`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to import file');
+    }
+    e.target.value = '';
+  };
+
   const exportList = async (key: ScannerKey) => {
     const scanner = data[key];
     const wb = new ExcelJS.Workbook();
@@ -325,6 +373,16 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
             onChange={e => updateLabel(key, e.target.value)}
           />
           <div className="flex items-center space-x-3">
+            <input 
+              type="file" 
+              accept=".xlsx" 
+              className="hidden" 
+              ref={fileInputRefs[key]} 
+              onChange={e => onImportFileSelected(key, e)} 
+            />
+            <button onClick={() => handleImportList(key)} className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors">
+              Import list (.xlsx)
+            </button>
             <button onClick={() => exportList(key)} className="text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors">
               Export list (.xlsx)
             </button>
