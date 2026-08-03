@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/**/*": {
-      "includeFiles": "{Systemlogo.jpg,node_modules/pdfkit/js/data/**}",
+      "includeFiles": ["Systemlogo.jpg", "node_modules/pdfkit/js/data/**"],
       "memory": 1024,
       "maxDuration": 60
     }

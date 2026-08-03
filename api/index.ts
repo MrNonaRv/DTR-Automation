@@ -1,9 +1,10 @@
-import express from 'express';
-import multer from 'multer';
-import { parseBiometricLogs } from '../src/utils/excelParser';
 import { generateDTR, generateAllDTRs } from '../src/utils/pdfGenerator';
+import express from 'express';
 
-const upload = multer({ storage: multer.memoryStorage() });
+import { parseBiometricLogs } from '../src/utils/excelParser';
+
+
+
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
@@ -42,6 +43,7 @@ app.post("/api/generate-dtr", async (req, res) => {
     if (!employeeName || !records) {
       return res.status(400).json({ error: "Missing employeeName or records in request body" });
     }
+    
     const pdfBuffer = await generateDTR(employeeName, period || "", records, printRange);
     const formattedPeriod = period ? `_${period.replace(/\s+/g, '_')}` : "";
     res.setHeader("Content-Type", "application/pdf");
@@ -59,6 +61,7 @@ app.post("/api/generate-all-dtrs", async (req, res) => {
     if (!employees || !Array.isArray(employees) || employees.length === 0) {
       return res.status(400).json({ error: "Missing or invalid employees array in request body" });
     }
+    
     const pdfBuffer = await generateAllDTRs(period || "", employees, printRange);
     const formattedPeriodAll = period ? `_${period.replace(/\s+/g, '_')}` : "";
     res.setHeader("Content-Type", "application/pdf");
@@ -73,9 +76,7 @@ app.post("/api/generate-all-dtrs", async (req, res) => {
 
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Global Error Handler:", err);
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ error: "File upload error", details: err.message });
-  }
+
   res.status(500).json({ error: "Internal Server Error", details: err.message || String(err) });
 });
 
@@ -83,3 +84,11 @@ export default app;
 
 
 
+
+
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};

@@ -72,12 +72,12 @@ async function startServer() {
   // API Route for uploading and parsing attendance logs
   app.post("/api/upload-attendance", (req, res) => {
     try {
-      if (!req.file) {
+      const { fileData } = req.body;
+      if (!fileData) {
         return res.status(400).json({ error: "No file uploaded" });
       }
-
-      // Parse the uploaded Excel file
-      const parsedData = parseBiometricLogs(req.file.buffer);
+      const buffer = Buffer.from(fileData, 'base64');
+      const parsedData = parseBiometricLogs(buffer);
       
       res.json({
         success: true,
