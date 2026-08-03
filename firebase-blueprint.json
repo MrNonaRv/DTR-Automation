@@ -1,0 +1,47 @@
+{
+  "collections": [
+    {
+      "name": "dtr_records",
+      "fields": [
+        {
+          "name": "employeeIdOrName",
+          "type": "string",
+          "description": "Employee Name or ID"
+        },
+        {
+          "name": "records",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "day": { "type": "number" },
+              "amIn": { "type": "string" },
+              "amOut": { "type": "string" },
+              "pmIn": { "type": "string" },
+              "pmOut": { "type": "string" },
+              "isLate": { "type": "boolean" },
+              "isAbsent": { "type": "boolean" },
+              "underTime": { "type": "boolean" }
+            }
+          },
+          "description": "Array of daily time records"
+        },
+        {
+          "name": "userId",
+          "type": "string",
+          "description": "The user ID of the person who uploaded/owns this DTR"
+        },
+        {
+          "name": "createdAt",
+          "type": "timestamp",
+          "description": "When this record was created/uploaded"
+        },
+        {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "description": "When this record was last updated"
+        }
+      ]
+    }
+  ]
+}

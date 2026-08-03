@@ -10,8 +10,10 @@ export interface AttendanceRecord {
 }
 
 export interface EmployeeAttendance {
+  id?: string;
   employeeIdOrName: string;
   records: AttendanceRecord[];
+  createdAt?: any;
 }
 
 export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {

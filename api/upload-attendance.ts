@@ -3,9 +3,7 @@ import { parseBiometricLogs } from '../src/utils/excelParser';
 
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
+    bodyParser: false,
   },
 };
 
@@ -15,10 +13,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   
   try {
-    const buffer = req.body;
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
 
-    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-      return res.status(400).json({ error: 'No file uploaded or invalid format. Must be octet-stream.' });
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const parsedData = parseBiometricLogs(buffer);
@@ -33,4 +35,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: "Failed to parse attendance file.", details: error.message });
   }
 }
-

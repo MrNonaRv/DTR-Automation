@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, LogIn, LogOut } from 'lucide-react';
+import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import { ScannerTool } from './components/ScannerTool';
 import { Toast } from './components/Toast';
-import { useAuth } from './lib/AuthContext';
-import { signInWithGoogle, logout } from './lib/firebase';
-import { db } from './lib/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { db } from './firebase';
 
 
 const toTitleCase = (str: string) => {
@@ -17,7 +15,6 @@ const toTitleCase = (str: string) => {
   });
 };
 export default function App() {
-  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
@@ -33,25 +30,23 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
-    if (user && !parsedData) {
-      const loadData = async () => {
-        try {
-          const docRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.latestData) {
-              setParsedData(data.latestData);
-              setToast({ message: 'Loaded your last saved DTR data.', type: 'info' });
-            }
-          }
-        } catch (error) {
-          console.error("Error loading data from firestore", error);
-        }
-      };
-      loadData();
-    }
-  }, [user]);
+    const unsubscribe = onSnapshot(collection(db, 'dtr_records'), (snapshot) => {
+      const records: EmployeeAttendance[] = [];
+      snapshot.forEach((docSnap) => {
+         records.push({ id: docSnap.id, ...docSnap.data() } as EmployeeAttendance);
+      });
+      records.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return timeA - timeB;
+      });
+      setParsedData(records.length > 0 ? records : null);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -159,19 +154,21 @@ export default function App() {
         ...emp,
         employeeIdOrName: toTitleCase(emp.employeeIdOrName)
       }));
-      setParsedData(formattedData);
       
-      if (user) {
-        try {
-          await setDoc(doc(db, "users", user.uid), {
-            latestData: formattedData,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-        } catch (err) {
-          console.error("Failed to save to firestore", err);
-        }
-      }
-
+      const batch = writeBatch(db);
+      formattedData.forEach((emp: EmployeeAttendance) => {
+        const newRef = doc(collection(db, 'dtr_records'));
+        batch.set(newRef, {
+          employeeIdOrName: emp.employeeIdOrName,
+          records: emp.records,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          userId: 'anonymous'
+        });
+      });
+      await batch.commit();
+      
+      setToast({ message: 'DTR Data uploaded and synced to cloud.', type: 'success' });
       setCurrentIndex(0);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
@@ -272,13 +269,15 @@ export default function App() {
     }
   };
 
-  const handleUpdateEmployee = React.useCallback((idx: number, updatedEmp: EmployeeAttendance) => {
-    setParsedData((prev) => {
-      if (!prev) return prev;
-      const newData = [...prev];
-      newData[idx] = updatedEmp;
-      return newData;
-    });
+  const handleUpdateEmployee = React.useCallback(async (idx: number, updatedEmp: EmployeeAttendance) => {
+    if (updatedEmp.id) {
+       await setDoc(doc(db, 'dtr_records', updatedEmp.id), {
+         employeeIdOrName: updatedEmp.employeeIdOrName,
+         records: updatedEmp.records,
+         updatedAt: serverTimestamp(),
+         userId: 'anonymous'
+       }, { merge: true });
+    }
   }, []);
 
   const handleDownloadEmployeeDTR = React.useCallback((emp: EmployeeAttendance) => {
@@ -300,28 +299,6 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            {user ? (
-              <div className="flex items-center space-x-3">
-                <span className="text-sm font-medium text-gray-700 hidden sm:inline-block">
-                  {user.displayName || user.email}
-                </span>
-                <button
-                  onClick={logout}
-                  className="flex items-center text-sm font-medium text-gray-600 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-red-200"
-                >
-                  <LogOut className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline-block">Sign Out</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={signInWithGoogle}
-                className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200"
-              >
-                <LogIn className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline-block">Sign In</span>
-              </button>
-            )}
             <button onClick={() => setShowScannerTool(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200">
               <Users className="w-4 h-4 mr-2" /> Scanner Tool
             </button>
@@ -400,6 +377,22 @@ export default function App() {
                   className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-gray-900 rounded-xl hover:bg-gray-800 font-medium text-base transition-colors w-full"
                 >
                   <UploadCloud className="w-5 h-5 mr-2" /> Upload Excel File
+                </button>
+                <button 
+                  onClick={async () => {
+                    const newRef = doc(collection(db, 'dtr_records'));
+                    await setDoc(newRef, {
+                      employeeIdOrName: 'New Employee',
+                      records: [],
+                      createdAt: serverTimestamp(),
+                      updatedAt: serverTimestamp(),
+                      userId: 'anonymous'
+                    });
+                    setCurrentIndex(0);
+                  }}
+                  className="mt-3 inline-flex items-center justify-center px-5 py-3 border border-gray-300 text-gray-700 bg-white rounded-xl hover:bg-gray-50 font-medium text-base transition-colors w-full"
+                >
+                  Create Blank DTR
                 </button>
               </div>
             </div>
@@ -509,9 +502,29 @@ export default function App() {
                     <CheckCircle2 className="w-5 h-5 text-green-500 mr-2" />
                     Parsed Results
                   </h2>
-                  <button onClick={handleReset} className="mt-3 text-sm text-blue-600 hover:text-blue-800 underline font-medium">
-                    Upload a different file
-                  </button>
+                  <div className="mt-3 flex items-center space-x-4">
+                    <button onClick={handleReset} className="text-sm text-blue-600 hover:text-blue-800 underline font-medium">
+                      Upload a different file
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        const newRef = doc(collection(db, 'dtr_records'));
+                        await setDoc(newRef, {
+                          employeeIdOrName: 'New Employee',
+                          records: [],
+                          createdAt: serverTimestamp(),
+                          updatedAt: serverTimestamp(),
+                          userId: 'anonymous'
+                        });
+                        if (parsedData) {
+                          setCurrentIndex(parsedData.length);
+                        }
+                      }} 
+                      className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
+                    >
+                      Add a new user
+                    </button>
+                  </div>
                   <p className="text-sm text-gray-500 mt-1">Found {parsedData.length} employees in the dataset.</p>
                 </div>
                 
@@ -546,6 +559,24 @@ export default function App() {
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Generate All DTRs
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to clear all DTR records across all devices?")) {
+                        const batch = writeBatch(db);
+                        parsedData?.forEach(emp => {
+                          if (emp.id) {
+                            batch.delete(doc(db, 'dtr_records', emp.id));
+                          }
+                        });
+                        await batch.commit();
+                        setParsedData(null);
+                        setFile(null);
+                      }
+                    }}
+                    className="inline-flex items-center justify-center px-5 py-2 h-[38px] bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-sm ml-3"
+                  >
+                    Clear All
                   </button>
                 </div>
               </div>
