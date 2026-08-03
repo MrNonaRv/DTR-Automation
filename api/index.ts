@@ -7,8 +7,23 @@ import { parseBiometricLogs } from '../src/utils/excelParser';
 
 const app = express();
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) {
+    next();
+  } else {
+    express.json({ limit: '50mb' })(req, res, next);
+  }
+});
+app.use((req, res, next) => {
+  if (req.body && Object.keys(req.body).length > 0) {
+    next();
+  } else {
+    express.urlencoded({ limit: '50mb', extended: true })(req, res, next);
+  }
+});
+
 
 app.get("/api/check-update", (req, res) => {
   res.json({ updateAvailable: false, message: "Updates handled by Vercel" });
@@ -88,8 +103,3 @@ export default app;
 
 
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
