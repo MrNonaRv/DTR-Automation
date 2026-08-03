@@ -17,12 +17,14 @@ app.post("/api/do-update", (req, res) => {
   res.status(400).json({ success: false, message: "Updates handled by Vercel" });
 });
 
-app.post("/api/upload-attendance", upload.single("file"), (req, res) => {
+app.post("/api/upload-attendance", (req, res) => {
   try {
-    if (!req.file) {
+    const { fileData } = req.body;
+    if (!fileData) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    const parsedData = parseBiometricLogs(req.file.buffer);
+    const buffer = Buffer.from(fileData, 'base64');
+    const parsedData = parseBiometricLogs(buffer);
     res.json({
       success: true,
       message: "Attendance logs parsed successfully.",
@@ -80,8 +82,4 @@ app.use((err: any, req: any, res: any, next: any) => {
 export default app;
 
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+

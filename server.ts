@@ -70,7 +70,7 @@ async function startServer() {
   });
 
   // API Route for uploading and parsing attendance logs
-  app.post("/api/upload-attendance", upload.single("file"), (req, res) => {
+  app.post("/api/upload-attendance", (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });

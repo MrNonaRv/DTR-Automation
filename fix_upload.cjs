@@ -1,91 +1,31 @@
 const fs = require('fs');
 
-let content = fs.readFileSync('src/App.tsx', 'utf8');
+// 1. Update src/App.tsx
+let appContent = fs.readFileSync('src/App.tsx', 'utf8');
+appContent = appContent.replace(
+  "const formData = new FormData();\n    formData.append('file', file);\n\n    try {\n      const response = await fetch('/api/upload-attendance', {\n        method: 'POST',\n        body: formData,\n      });",
+  `try {\n      const reader = new FileReader();\n      const fileBase64 = await new Promise((resolve, reject) => {\n        reader.onload = () => resolve(reader.result.split(',')[1]);\n        reader.onerror = reject;\n        reader.readAsDataURL(file);\n      });\n\n      const response = await fetch('/api/upload-attendance', {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n        },\n        body: JSON.stringify({\n          fileName: file.name,\n          fileData: fileBase64\n        }),\n      });`
+);
+fs.writeFileSync('src/App.tsx', appContent);
 
-const oldHandleUpload = `  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file first.');
-      return;
-    }
+// 2. Update api/index.ts
+let apiContent = fs.readFileSync('api/index.ts', 'utf8');
+apiContent = apiContent.replace(
+  "app.post(\"/api/upload-attendance\", upload.single(\"file\"), (req, res) => {\n  try {\n    if (!req.file) {\n      return res.status(400).json({ error: \"No file uploaded\" });\n    }\n    const parsedData = parseBiometricLogs(req.file.buffer);",
+  "app.post(\"/api/upload-attendance\", (req, res) => {\n  try {\n    const { fileData } = req.body;\n    if (!fileData) {\n      return res.status(400).json({ error: \"No file uploaded\" });\n    }\n    const buffer = Buffer.from(fileData, 'base64');\n    const parsedData = parseBiometricLogs(buffer);"
+);
+apiContent = apiContent.replace(
+  "export const config = {\n  api: {\n    bodyParser: false,\n  },\n};",
+  ""
+);
+fs.writeFileSync('api/index.ts', apiContent);
 
-    setIsUploading(true);
-    setError(null);
+// 3. Update server.ts
+let serverContent = fs.readFileSync('server.ts', 'utf8');
+serverContent = serverContent.replace(
+  "app.post(\"/api/upload-attendance\", upload.single(\"file\"), (req, res) => {\n    try {\n      if (!req.file) {\n        return res.status(400).json({ error: \"No file uploaded\" });\n      }\n      // Parse the uploaded Excel file\n      const parsedData = parseBiometricLogs(req.file.buffer);",
+  "app.post(\"/api/upload-attendance\", (req, res) => {\n    try {\n      const { fileData } = req.body;\n      if (!fileData) {\n        return res.status(400).json({ error: \"No file uploaded\" });\n      }\n      // Parse the uploaded Excel file\n      const buffer = Buffer.from(fileData, 'base64');\n      const parsedData = parseBiometricLogs(buffer);"
+);
+fs.writeFileSync('server.ts', serverContent);
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await fetch('/api/upload-attendance', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const result = await response.json();
-      const formattedData = result.data.map((emp: EmployeeAttendance) => ({
-        ...emp,
-        employeeIdOrName: toTitleCase(emp.employeeIdOrName)
-      }));
-      setParsedData(formattedData);
-      setCurrentIndex(0);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during upload.');
-    } finally {
-      setIsUploading(false);
-    }
-  };`;
-
-const newHandleUpload = `  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file first.');
-      return;
-    }
-
-    setIsUploading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await fetch('/api/upload-attendance', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        let errMsg = 'Expected JSON but got HTML. ';
-        if (text.includes('<!DOCTYPE') || text.includes('<!doctype')) {
-            errMsg += 'The server returned an HTML page (possibly a redirect or an unhandled proxy error). ';
-        }
-        errMsg += \`Status: \${response.status}. \${text.substring(0, 50)}\`;
-        throw new Error(errMsg);
-      }
-
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || errJson.details || 'Upload failed');
-      }
-
-      const result = await response.json();
-      const formattedData = result.data.map((emp: EmployeeAttendance) => ({
-        ...emp,
-        employeeIdOrName: toTitleCase(emp.employeeIdOrName)
-      }));
-      setParsedData(formattedData);
-      setCurrentIndex(0);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during upload.');
-    } finally {
-      setIsUploading(false);
-    }
-  };`;
-
-content = content.replace(oldHandleUpload, newHandleUpload);
-fs.writeFileSync('src/App.tsx', content);
-console.log('Fixed');
+console.log('Fixed upload to use base64 instead of multipart/form-data');
