@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateAllDTRs } from '../src/utils/pdfGenerator.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -10,6 +9,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!employees || !Array.isArray(employees) || employees.length === 0) {
       return res.status(400).json({ error: 'Missing or invalid employees array in request body' });
     }
+    const { generateAllDTRs } = await import('../src/utils/pdfGenerator');
     const pdfBuffer = await generateAllDTRs(period || "", employees, printRange);
     const formattedPeriodAll = period ? `_${period.replace(/\s+/g, '_')}` : "";
     res.setHeader("Content-Type", "application/pdf");
