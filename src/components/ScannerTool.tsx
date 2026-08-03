@@ -199,8 +199,8 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
 
   const handleFile = (file: File) => {
     const lower = file.name.toLowerCase();
-    if (!lower.endsWith('.dat') && !lower.endsWith('.xlsx')) {
-      setToast({ message: 'Please choose a .dat or .xlsx file', type: 'error' });
+    if (!lower.endsWith('.dat')) {
+      setToast({ message: 'Please choose a .dat file', type: 'error' });
       return;
     }
     setUploadedFile(file);
@@ -340,13 +340,6 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         appendLog(`Parsed ${result.totalPunches} punches across ${spec.length} users.`, 'ok');
         appendLog(`Matched ${result.matched} names from ${data[selectedScanner].label} roster.`, result.matched > 0 ? 'ok' : 'warn');
         if (result.unmatched > 0) appendLog(`${result.unmatched} user(s) had no roster match — labeled "User {number}".`, 'warn');
-      } else if (lower.endsWith('.xlsx')) {
-        const buf = await uploadedFile.arrayBuffer();
-        const result = await parsePerUserWorkbook(buf);
-        if (result.spec.length === 0) throw new Error('No per-user sheets with UserID/DateTime found in this workbook.');
-        spec = result.spec;
-        appendLog(`Read ${result.totalPunches} punches across ${spec.length} existing sheets.`, 'ok');
-        appendLog('Sheet names kept as-is — no re-matching against the roster.', 'ok');
       } else {
         throw new Error('Unsupported file type.');
       }
@@ -359,6 +352,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
 
     } catch (err: any) {
       appendLog('Error: ' + err.message, 'warn');
+      setToast({ message: err.message, type: 'error' });
       console.error(err);
     } finally {
       setIsConverting(false);
@@ -527,15 +521,15 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                   </>
                 ) : (
                   <>
-                    <p className="font-semibold text-gray-900">Drop a .dat or .xlsx file here, or click to browse</p>
-                    <p className="text-sm text-gray-500 mt-1">Raw scanner export (.dat) or a previously-saved per-user workbook (.xlsx)</p>
+                    <p className="font-semibold text-gray-900">Drop a .dat file here, or click to browse</p>
+                    <p className="text-sm text-gray-500 mt-1">Raw scanner export (.dat)</p>
                   </>
                 )}
                 <input
                   type="file"
                   ref={fileInputRef}
                   className="hidden"
-                  accept=".dat,.xlsx"
+                  accept=".dat"
                   onChange={e => { if (e.target.files?.length) { handleFile(e.target.files[0]); e.target.value = ''; } }}
                 />
               </div>

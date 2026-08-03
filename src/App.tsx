@@ -135,6 +135,7 @@ export default function App() {
       setCurrentIndex(0);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
+      setToast({ message: err.message || 'An error occurred during upload.', type: 'error' });
     } finally {
       setIsUploading(false);
     }
@@ -185,7 +186,7 @@ export default function App() {
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Error generating PDF: ${err.message}`);
+      setToast({ message: `Error generating PDF: ${err.message}`, type: 'error' });
     }
   };
 
@@ -227,7 +228,7 @@ export default function App() {
       link.parentNode?.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Error generating PDFs: ${err.message}`);
+      setToast({ message: `Error generating PDFs: ${err.message}`, type: 'error' });
     }
   };
 
