@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, LogIn, LogOut } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import { ScannerTool } from './components/ScannerTool';
 import { Toast } from './components/Toast';
+import { useAuth } from './lib/AuthContext';
+import { signInWithGoogle, logout } from './lib/firebase';
+import { db } from './lib/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 
 const toTitleCase = (str: string) => {
@@ -13,6 +17,7 @@ const toTitleCase = (str: string) => {
   });
 };
 export default function App() {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
@@ -26,6 +31,27 @@ export default function App() {
   const [showUploadUI, setShowUploadUI] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  useEffect(() => {
+    if (user && !parsedData) {
+      const loadData = async () => {
+        try {
+          const docRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.latestData) {
+              setParsedData(data.latestData);
+              setToast({ message: 'Loaded your last saved DTR data.', type: 'info' });
+            }
+          }
+        } catch (error) {
+          console.error("Error loading data from firestore", error);
+        }
+      };
+      loadData();
+    }
+  }, [user]);
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -134,6 +160,18 @@ export default function App() {
         employeeIdOrName: toTitleCase(emp.employeeIdOrName)
       }));
       setParsedData(formattedData);
+      
+      if (user) {
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            latestData: formattedData,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (err) {
+          console.error("Failed to save to firestore", err);
+        }
+      }
+
       setCurrentIndex(0);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
@@ -262,6 +300,28 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            {user ? (
+              <div className="flex items-center space-x-3">
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline-block">
+                  {user.displayName || user.email}
+                </span>
+                <button
+                  onClick={logout}
+                  className="flex items-center text-sm font-medium text-gray-600 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-red-200"
+                >
+                  <LogOut className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline-block">Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={signInWithGoogle}
+                className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200"
+              >
+                <LogIn className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline-block">Sign In</span>
+              </button>
+            )}
             <button onClick={() => setShowScannerTool(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200">
               <Users className="w-4 h-4 mr-2" /> Scanner Tool
             </button>
