@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { generateDTR } from '../src/utils/pdfGenerator.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -9,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!employeeName || !records) {
       return res.status(400).json({ error: 'Missing employeeName or records in request body' });
     }
-    const { generateDTR } = await import('../src/utils/pdfGenerator');
     const pdfBuffer = await generateDTR(employeeName, period || "", records, printRange);
     const formattedPeriod = period ? `_${period.replace(/\s+/g, '_')}` : "";
     res.setHeader("Content-Type", "application/pdf");

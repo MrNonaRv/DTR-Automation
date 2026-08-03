@@ -308,63 +308,8 @@ export default function App() {
           </div>
         )}
 
-        {!parsedData && !showUploadUI && (
-          <div className="max-w-4xl mx-auto space-y-8 mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center space-y-4 mb-10">
-              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Simplify Your DTR Generation</h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-lg leading-relaxed">
-                Convert raw biometric logs to polished PDF Daily Time Records in seconds. Manage employee rosters, parse attendance, and generate reports.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
-                <div>
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-emerald-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-                  <div className="w-14 h-14 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-6">
-                    <Users className="w-7 h-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">1. Prepare Data</h3>
-                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Convert raw .dat files from your biometric scanner into clean Excel workbooks organized by employee name.</p>
-                </div>
-                <button 
-                  onClick={() => setShowScannerTool(true)}
-                  className="inline-flex items-center justify-center px-5 py-3 border border-teal-200 text-teal-700 bg-teal-50 rounded-xl hover:bg-teal-100 font-medium text-base transition-colors w-full"
-                >
-                  Open Scanner Tool <ChevronRight className="w-5 h-5 ml-2" />
-                </button>
-              </div>
-
-              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
-                <div>
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-                  <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
-                    <File className="w-7 h-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">2. Generate DTR</h3>
-                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
-                </div>
-                <button 
-                  onClick={() => setShowUploadUI(true)}
-                  className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-gray-900 rounded-xl hover:bg-gray-800 font-medium text-base transition-colors w-full"
-                >
-                  <UploadCloud className="w-5 h-5 mr-2" /> Upload Excel File
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!parsedData && showUploadUI && (
+        {!parsedData && (
           <div className="max-w-4xl mx-auto mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-6 flex">
-              <button 
-                onClick={() => setShowUploadUI(false)} 
-                className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-50"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" /> Back
-              </button>
-            </div>
             <div className="text-center space-y-4 mb-10">
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Streamline your attendance</h2>
               <p className="text-gray-500 max-w-2xl mx-auto text-lg leading-relaxed">
@@ -392,7 +337,7 @@ export default function App() {
                   className="cursor-pointer relative z-10"
                 >
                   <span className="text-blue-600 font-medium hover:text-blue-700 transition-colors">Click to upload</span>
-                  <span className="text-gray-500 ml-1">or drag and drop your Excel file here</span>
+                  <span className="text-gray-500 ml-1 hidden sm:inline">or drag and drop your Excel file here</span>
                   <input
                     id="file-upload-direct"
                     type="file"
