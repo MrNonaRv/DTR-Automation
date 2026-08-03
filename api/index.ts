@@ -68,4 +68,20 @@ app.post("/api/generate-all-dtrs", async (req, res) => {
   }
 });
 
+
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Global Error Handler:", err);
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ error: "File upload error", details: err.message });
+  }
+  res.status(500).json({ error: "Internal Server Error", details: err.message || String(err) });
+});
+
 export default app;
+
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
