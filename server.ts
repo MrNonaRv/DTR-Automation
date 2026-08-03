@@ -87,7 +87,7 @@ app.use((req, res, next) => {
   // API Route for uploading and parsing attendance logs
   app.post("/api/upload-attendance", (req, res) => {
     try {
-      console.log('req.body:', typeof req.body === 'string' ? req.body.substring(0, 100) : Object.keys(req.body));
+      
     const { fileData } = req.body;
       if (!fileData) {
         return res.status(400).json({ error: "No file uploaded" });

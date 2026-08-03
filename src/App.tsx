@@ -104,7 +104,7 @@ export default function App() {
     try {
       const reader = new FileReader();
       const fileBase64 = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
