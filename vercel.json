@@ -1,12 +1,13 @@
 {
   "functions": {
     "api/**/*": {
-      "includeFiles": "Systemlogo.jpg",
+      "includeFiles": ["Systemlogo.jpg", "node_modules/pdfkit/js/data/**"],
       "memory": 1024,
       "maxDuration": 60
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" }
+    { "source": "/api/(.*)", "destination": "/api/index.ts" },
+    { "source": "/((?!api/.*).*)", "destination": "/index.html" }
   ]
 }

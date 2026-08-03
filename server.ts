@@ -118,7 +118,7 @@ async function startServer() {
         return res.status(400).json({ error: "Missing or invalid employees array in request body" });
       }
 
-      const { generateAllDTRs } = await import("./src/utils/pdfGenerator.js");
+      const { generateAllDTRs } = await import("./src/utils/pdfGenerator");
       const pdfBuffer = await generateAllDTRs(period || "", employees, printRange);
 
       const formattedPeriodAll = period ? `_${period.replace(/\s+/g, '_')}` : "";

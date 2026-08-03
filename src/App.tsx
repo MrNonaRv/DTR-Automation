@@ -3,6 +3,7 @@ import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, A
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import { ScannerTool } from './components/ScannerTool';
+import { Toast } from './components/Toast';
 
 
 const toTitleCase = (str: string) => {
@@ -22,6 +23,8 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showScannerTool, setShowScannerTool] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -46,12 +49,31 @@ export default function App() {
     setIsUpdating(true);
     try {
       await fetch('/api/do-update', { method: 'POST' });
-      alert("System is updating and will restart in the background. Please wait a few seconds and refresh the page manually.");
+      setToast({ message: 'System is updating. Please refresh the page manually in a few moments.', type: 'info' });
       setUpdateAvailable(false);
     } catch (e) {
-      alert("Failed to initiate update.");
+      setToast({ message: 'Failed to initiate update.', type: 'error' });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFile(e.dataTransfer.files[0]);
+      setError(null);
     }
   };
 
@@ -66,6 +88,7 @@ export default function App() {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
       setError(null);
+      e.target.value = '';
     }
   };
 
@@ -299,20 +322,25 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
+              <div 
+                className={`bg-white rounded-2xl shadow-sm border p-8 hover:shadow-md transition-all relative overflow-hidden group flex flex-col justify-between ${isDragging ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200'}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <div>
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                   <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-6">
                     <File className="w-6 h-6" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 mb-2">2. Generate DTR</h3>
-                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
+                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports. You can click to browse or drag and drop your file here.</p>
                 </div>
                 <label 
                   htmlFor="file-upload-direct"
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium text-sm transition-colors w-full cursor-pointer"
+                  className={`inline-flex items-center justify-center px-4 py-2 border rounded-lg font-medium text-sm transition-colors w-full cursor-pointer ${isDragging ? 'bg-blue-100 text-blue-700 border-blue-200' : 'border-transparent bg-gray-900 text-white hover:bg-gray-800'}`}
                 >
-                  <UploadCloud className="w-4 h-4 mr-2" /> Upload Excel File
+                  <UploadCloud className="w-4 h-4 mr-2" /> {isDragging ? 'Drop file here' : 'Upload Excel File'}
                 </label>
                 <input
                   id="file-upload-direct"
@@ -470,6 +498,7 @@ export default function App() {
         )}
       </main>
       {showScannerTool && <ScannerTool onClose={() => setShowScannerTool(false)} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

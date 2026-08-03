@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, File as FileIcon, CheckCircle2, AlertCircle, Download, X, Plus } from 'lucide-react';
 import ExcelJS from 'exceljs';
+import { Toast, ToastType } from './Toast';
 
 const SCANNER_KEYS = ['scanner1', 'scanner2'] as const;
 type ScannerKey = typeof SCANNER_KEYS[number];
@@ -18,7 +19,10 @@ interface ScannerData {
   people: Person[];
 }
 
-export function ScannerTool({ onClose }: { onClose: () => void }) {
+import { memo } from 'react';
+
+export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () => void }) {
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [activeTab, setActiveTab] = useState<ScannerKey | 'convert'>('scanner1');
   const [data, setData] = useState<Record<ScannerKey, ScannerData>>({
     scanner1: { label: 'Scanner 1', people: [] },
@@ -127,7 +131,7 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
       await wb.xlsx.load(buffer);
       const ws = wb.worksheets[0];
       if (!ws) {
-        alert('No worksheet found in the file.');
+        setToast({ message: 'No worksheet found in the file.', type: 'error' });
         return;
       }
 
@@ -147,10 +151,10 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
         [key]: { ...prev[key], people: newPeople }
       }));
       markUnsaved(key);
-      alert(`${data[key].label} list imported from ${file.name}`);
+      setToast({ message: `${data[key].label} list imported from ${file.name}`, type: 'success' });
     } catch (err) {
       console.error(err);
-      alert('Failed to import file');
+      setToast({ message: 'Failed to import file', type: 'error' });
     }
     e.target.value = '';
   };
@@ -196,7 +200,7 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
   const handleFile = (file: File) => {
     const lower = file.name.toLowerCase();
     if (!lower.endsWith('.dat') && !lower.endsWith('.xlsx')) {
-      alert('Please choose a .dat or .xlsx file');
+      setToast({ message: 'Please choose a .dat or .xlsx file', type: 'error' });
       return;
     }
     setUploadedFile(file);
@@ -499,7 +503,7 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
                 {SCANNER_KEYS.map(key => (
                   <button
                     key={key}
-                    onClick={() => setSelectedScanner(key)}
+                    onClick={() => { if (selectedScanner !== key) { setSelectedScanner(key); setUploadedFile(null); setBuiltWorkbookBuffer(null); setLogs([]); } }}
                     className={`flex-1 text-left p-4 rounded-xl border-2 transition-colors ${selectedScanner === key ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
                   >
                     <div className={`font-semibold ${selectedScanner === key ? 'text-blue-900' : 'text-gray-900'}`}>{data[key].label}</div>
@@ -532,7 +536,7 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
                   ref={fileInputRef}
                   className="hidden"
                   accept=".dat,.xlsx"
-                  onChange={e => { if (e.target.files?.length) handleFile(e.target.files[0]) }}
+                  onChange={e => { if (e.target.files?.length) { handleFile(e.target.files[0]); e.target.value = ''; } }}
                 />
               </div>
             </div>
@@ -570,6 +574,7 @@ export function ScannerTool({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
-}
+});
