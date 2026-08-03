@@ -103,22 +103,13 @@ export default function App() {
     setError(null);
 
     try {
-      const reader = new FileReader();
-      const fileBase64 = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
       const response = await fetch('/api/upload-attendance', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/octet-stream',
+          'x-file-name': encodeURIComponent(file.name)
         },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileData: fileBase64
-        }),
+        body: file,
       });
 
       const contentType = response.headers.get("content-type");

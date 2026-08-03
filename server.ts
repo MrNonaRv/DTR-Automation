@@ -30,6 +30,8 @@ app.use((req, res, next) => {
 });
 
 
+  app.use(express.raw({ type: 'application/octet-stream', limit: '50mb' }));
+
   // API Route for checking for system updates (assuming git repository)
   app.get("/api/check-update", async (req, res) => {
     try {
@@ -87,12 +89,11 @@ app.use((req, res, next) => {
   // API Route for uploading and parsing attendance logs
   app.post("/api/upload-attendance", (req, res) => {
     try {
-      
-    const { fileData } = req.body;
-      if (!fileData) {
-        return res.status(400).json({ error: "No file uploaded" });
+      const buffer = req.body;
+      if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+        return res.status(400).json({ error: "No file uploaded or invalid format. Must be octet-stream." });
       }
-      const buffer = Buffer.from(fileData, 'base64');
+      
       const parsedData = parseBiometricLogs(buffer);
       
       res.json({
