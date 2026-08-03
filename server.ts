@@ -72,7 +72,8 @@ async function startServer() {
   // API Route for uploading and parsing attendance logs
   app.post("/api/upload-attendance", (req, res) => {
     try {
-      const { fileData } = req.body;
+      console.log('req.body:', typeof req.body === 'string' ? req.body.substring(0, 100) : Object.keys(req.body));
+    const { fileData } = req.body;
       if (!fileData) {
         return res.status(400).json({ error: "No file uploaded" });
       }
