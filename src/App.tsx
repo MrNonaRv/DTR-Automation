@@ -23,6 +23,7 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showScannerTool, setShowScannerTool] = useState(false);
+  const [showUploadUI, setShowUploadUI] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -307,78 +308,121 @@ export default function App() {
           </div>
         )}
 
-        {!parsedData && (
-          <div className="max-w-4xl mx-auto space-y-8 mt-4">
-            <div className="text-center space-y-4">
-              <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Simplify Your DTR Generation</h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-lg">Convert raw biometric logs to polished PDF Daily Time Records in seconds. Manage employee rosters, parse attendance, and generate reports.</p>
+        {!parsedData && !showUploadUI && (
+          <div className="max-w-4xl mx-auto space-y-8 mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center space-y-4 mb-10">
+              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Simplify Your DTR Generation</h2>
+              <p className="text-gray-500 max-w-2xl mx-auto text-lg leading-relaxed">
+                Convert raw biometric logs to polished PDF Daily Time Records in seconds. Manage employee rosters, parse attendance, and generate reports.
+              </p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
+              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
                 <div>
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-emerald-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-                  <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-6">
-                    <Users className="w-6 h-6" />
+                  <div className="w-14 h-14 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-6">
+                    <Users className="w-7 h-7" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">1. Prepare Data</h3>
-                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Convert raw .dat files from your biometric scanner into clean Excel workbooks organized by employee name.</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">1. Prepare Data</h3>
+                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Convert raw .dat files from your biometric scanner into clean Excel workbooks organized by employee name.</p>
                 </div>
                 <button 
                   onClick={() => setShowScannerTool(true)}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-teal-200 text-teal-700 bg-teal-50 rounded-lg hover:bg-teal-100 font-medium text-sm transition-colors w-full"
+                  className="inline-flex items-center justify-center px-5 py-3 border border-teal-200 text-teal-700 bg-teal-50 rounded-xl hover:bg-teal-100 font-medium text-base transition-colors w-full"
                 >
-                  Open Scanner Tool <ChevronRight className="w-4 h-4 ml-2" />
+                  Open Scanner Tool <ChevronRight className="w-5 h-5 ml-2" />
                 </button>
               </div>
 
+              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
+                <div>
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
+                  <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+                    <File className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">2. Generate DTR</h3>
+                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
+                </div>
+                <button 
+                  onClick={() => setShowUploadUI(true)}
+                  className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-gray-900 rounded-xl hover:bg-gray-800 font-medium text-base transition-colors w-full"
+                >
+                  <UploadCloud className="w-5 h-5 mr-2" /> Upload Excel File
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!parsedData && showUploadUI && (
+          <div className="max-w-4xl mx-auto mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-6 flex">
+              <button 
+                onClick={() => setShowUploadUI(false)} 
+                className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm hover:bg-gray-50"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </button>
+            </div>
+            <div className="text-center space-y-4 mb-10">
+              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Streamline your attendance</h2>
+              <p className="text-gray-500 max-w-2xl mx-auto text-lg leading-relaxed">
+                Upload biometric Excel logs to parse, validate, and generate Daily Time Records in seconds.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 sm:p-10 relative overflow-hidden">
               <div 
-                className={`bg-white rounded-2xl shadow-sm border p-8 hover:shadow-md transition-all relative overflow-hidden group flex flex-col justify-between ${isDragging ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200'}`}
+                className={`border-2 border-dashed rounded-2xl p-12 transition-all duration-300 relative flex flex-col items-center justify-center text-center ${
+                  isDragging ? 'border-blue-500 bg-blue-50/50 scale-[0.99]' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <div>
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-6">
-                    <File className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">2. Generate DTR</h3>
-                  <p className="text-gray-500 mb-6 text-sm leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports. You can click to browse or drag and drop your file here.</p>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 transition-colors duration-300 ${
+                  isDragging ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-400'
+                }`}>
+                  <UploadCloud className="w-8 h-8" />
                 </div>
+                
                 <label 
                   htmlFor="file-upload-direct"
-                  className={`inline-flex items-center justify-center px-4 py-2 border rounded-lg font-medium text-sm transition-colors w-full cursor-pointer ${isDragging ? 'bg-blue-100 text-blue-700 border-blue-200' : 'border-transparent bg-gray-900 text-white hover:bg-gray-800'}`}
+                  className="cursor-pointer relative z-10"
                 >
-                  <UploadCloud className="w-4 h-4 mr-2" /> {isDragging ? 'Drop file here' : 'Upload Excel File'}
+                  <span className="text-blue-600 font-medium hover:text-blue-700 transition-colors">Click to upload</span>
+                  <span className="text-gray-500 ml-1">or drag and drop your Excel file here</span>
+                  <input
+                    id="file-upload-direct"
+                    type="file"
+                    className="sr-only"
+                    accept=".xlsx, .xls"
+                    onChange={handleFileChange}
+                  />
                 </label>
-                <input
-                  id="file-upload-direct"
-                  type="file"
-                  className="sr-only"
-                  accept=".xlsx, .xls"
-                  onChange={handleFileChange}
-                />
+                
+                <p className="text-gray-400 text-xs mt-3 font-mono">
+                  .xlsx or .xls up to 10MB
+                </p>
               </div>
-
             </div>
 
             {file && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col sm:flex-row items-center justify-between animate-in fade-in slide-in-from-bottom-4">
+              <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 pl-6 flex flex-col sm:flex-row items-center justify-between animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center space-x-4 mb-4 sm:mb-0">
-                  <div className="bg-blue-50 p-3 rounded-xl">
-                    <File className="h-6 w-6 text-blue-600" />
+                  <div className="bg-blue-50 p-3 rounded-xl text-blue-600">
+                    <File className="h-6 w-6" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900">{file.name}</h4>
+                  <div className="text-left">
+                    <h4 className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-xs">{file.name}</h4>
                     <p className="text-xs text-gray-500 font-mono mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => setFile(null)}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
@@ -396,12 +440,11 @@ export default function App() {
             )}
             
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-800">
+              <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-800 animate-in fade-in">
                 <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5 text-red-500" />
                 <p className="text-sm font-medium">{error}</p>
               </div>
             )}
-
           </div>
         )}
         
