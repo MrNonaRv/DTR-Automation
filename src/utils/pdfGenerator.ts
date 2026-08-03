@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
-import { AttendanceRecord } from "./excelParser.js";
+import { AttendanceRecord } from "./excelParser";
 
 
 

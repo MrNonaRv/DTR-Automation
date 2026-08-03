@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { parseBiometricLogs } from '../src/utils/excelParser';
+import { parseBiometricLogs } from '../src/utils/excelParser.ts';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
