@@ -21,6 +21,15 @@ interface ScannerData {
   people: Person[];
 }
 
+export interface RecentFile {
+  id: string;
+  filename: string;
+  uploadedAt: string;
+  size: number;
+  content: string;
+  scannerKey: ScannerKey;
+}
+
 import { memo } from 'react';
 
 export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () => void }) {
@@ -35,6 +44,8 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     scanner1: 'saved',
     scanner2: 'saved'
   });
+
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
 
   const saveTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
   const dataRef = useRef(data);
@@ -62,6 +73,18 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         }
       }
       setData(loaded);
+      
+      try {
+        const recentSnap = await getDoc(doc(db, 'scanner_configs', 'recent_files_v1'));
+        if (recentSnap.exists()) {
+          const parsedRecent = recentSnap.data();
+          if (Array.isArray(parsedRecent.files)) {
+            setRecentFiles(parsedRecent.files);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load recent files config", e);
+      }
     };
     loadData();
   }, []);
@@ -342,6 +365,25 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         appendLog(`Parsed ${result.totalPunches} punches across ${spec.length} users.`, 'ok');
         appendLog(`Matched ${result.matched} names from ${data[selectedScanner].label} roster.`, result.matched > 0 ? 'ok' : 'warn');
         if (result.unmatched > 0) appendLog(`${result.unmatched} user(s) had no roster match — labeled "User {number}".`, 'warn');
+        
+        // Save to recent files
+        const newFile: RecentFile = {
+          id: Math.random().toString(36).slice(2, 10),
+          filename: uploadedFile.name,
+          uploadedAt: new Date().toISOString(),
+          size: uploadedFile.size,
+          content: text,
+          scannerKey: selectedScanner
+        };
+        
+        setRecentFiles(prev => {
+          const next = [newFile, ...prev].slice(0, 10); // Keep last 10
+          setDoc(doc(db, 'scanner_configs', 'recent_files_v1'), { files: next }).catch(err => {
+            console.error('Failed to save recent files to firestore', err);
+          });
+          return next;
+        });
+
       } else {
         throw new Error('Unsupported file type.');
       }
@@ -566,6 +608,44 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                 </button>
               )}
             </div>
+            
+            {recentFiles.length > 0 && (
+              <div className="mt-10 pt-8 border-t border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Recent Uploads</h3>
+                <div className="space-y-3">
+                  {recentFiles.map(file => (
+                    <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div>
+                        <div className="font-semibold text-gray-900 flex items-center gap-2">
+                          <FileIcon className="w-4 h-4 text-blue-500" />
+                          {file.filename}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1 font-mono">
+                          {new Date(file.uploadedAt).toLocaleString()} &mdash; {data[file.scannerKey]?.label || file.scannerKey} &mdash; {(file.size / 1024).toFixed(1)} KB
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([file.content], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = file.filename;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          setTimeout(() => URL.revokeObjectURL(url), 2000);
+                        }}
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors flex items-center shadow-sm"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Raw
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
           </div>
         )}

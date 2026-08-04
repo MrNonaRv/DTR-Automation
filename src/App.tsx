@@ -387,6 +387,14 @@ export default function App() {
                       updatedAt: serverTimestamp(),
                       userId: 'anonymous'
                     });
+                    
+                    const newEmp = {
+                      id: newRef.id,
+                      employeeIdOrName: 'New Employee',
+                      records: []
+                    };
+                    
+                    setParsedData([newEmp]);
                     setCurrentIndex(0);
                     setShowEditor(true);
                   }}
@@ -522,8 +530,24 @@ export default function App() {
                           updatedAt: serverTimestamp(),
                           userId: 'anonymous'
                         });
+                        
+                        const newEmp = {
+                          id: newRef.id,
+                          employeeIdOrName: 'New Employee',
+                          records: []
+                        };
+                        
+                        setParsedData(prev => {
+                          if (prev) {
+                            return [...prev, newEmp];
+                          }
+                          return [newEmp];
+                        });
+                        
                         if (parsedData) {
                           setCurrentIndex(parsedData.length);
+                        } else {
+                          setCurrentIndex(0);
                         }
                       }} 
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors w-full sm:w-auto"
