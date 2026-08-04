@@ -3,7 +3,7 @@ import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, A
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import { Toast } from './components/Toast';
-import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
@@ -28,6 +28,7 @@ export default function App() {
   const [showUploadUI, setShowUploadUI] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isCreatingBlank, setIsCreatingBlank] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const checkUpdate = async (manual = false) => {
@@ -378,29 +379,66 @@ export default function App() {
                   <UploadCloud className="w-5 h-5 mr-2" /> Upload Excel File
                 </button>
                 <button 
+                  disabled={isCreatingBlank}
                   onClick={async () => {
-                    const newRef = doc(collection(db, 'dtr_records'));
-                    await setDoc(newRef, {
-                      employeeIdOrName: 'New Employee',
-                      records: [],
-                      createdAt: serverTimestamp(),
-                      updatedAt: serverTimestamp(),
-                      userId: 'anonymous'
-                    });
+                    setIsCreatingBlank(true);
+                    try {
+                      let newEmployees = [];
+                    try {
+                      const docSnap = await getDoc(doc(db, 'scanner_configs', 'no_biometric'));
+                      if (docSnap.exists()) {
+                        const parsed = docSnap.data();
+                        if (Array.isArray(parsed.people) && parsed.people.length > 0) {
+                          newEmployees = parsed.people.map(p => ({
+                            employeeIdOrName: p.name ? p.name.trim() : `User ${p.empNo}`,
+                            records: []
+                          }));
+                        }
+                      }
+                    } catch (e) {
+                      console.error("Failed to load no_biometric config", e);
+                    }
+
+                    if (newEmployees.length === 0) {
+                      newEmployees = [{
+                        employeeIdOrName: 'New Employee',
+                        records: []
+                      }];
+                    }
+
+                    const parsedDataArray = [];
+                    for (const emp of newEmployees) {
+                      const newRef = doc(collection(db, 'dtr_records'));
+                      await setDoc(newRef, {
+                        employeeIdOrName: emp.employeeIdOrName,
+                        records: [],
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                        userId: 'anonymous'
+                      });
+                      parsedDataArray.push({
+                        id: newRef.id,
+                        employeeIdOrName: emp.employeeIdOrName,
+                        records: []
+                      });
+                    }
                     
-                    const newEmp = {
-                      id: newRef.id,
-                      employeeIdOrName: 'New Employee',
-                      records: []
-                    };
-                    
-                    setParsedData([newEmp]);
+                    setParsedData(parsedDataArray);
                     setCurrentIndex(0);
                     setShowEditor(true);
+                    } catch(err) {
+                      console.error(err);
+                    } finally {
+                      setIsCreatingBlank(false);
+                    }
                   }}
-                  className="mt-3 inline-flex items-center justify-center px-5 py-3 border border-gray-300 text-gray-700 bg-white rounded-xl hover:bg-gray-50 font-medium text-base transition-colors w-full"
+                  className="mt-3 inline-flex items-center justify-center px-5 py-3 border border-gray-300 text-gray-700 bg-white rounded-xl hover:bg-gray-50 font-medium text-base transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Blank DTR
+                  {isCreatingBlank ? (
+                    <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Creating...</>
+                  ) : (
+                    'Create Blank DTR'
+                  )}
                 </button>
               </div>
             </div>
@@ -637,12 +675,17 @@ export default function App() {
                     onClick={() => {
                       const emp = parsedData[currentIndex];
                       if (confirm(`Are you sure you want to delete ${emp.employeeIdOrName}?`)) {
+                        const isLast = parsedData.length === 1;
                         setParsedData(prev => {
                           if (!prev) return null;
                           const next = prev.filter((_, i) => i !== currentIndex);
                           return next.length > 0 ? next : null;
                         });
-                        setCurrentIndex(prev => Math.max(0, prev - 1));
+                        if (isLast) {
+                          setShowEditor(false);
+                        } else {
+                          setCurrentIndex(prev => Math.max(0, prev - 1));
+                        }
                         setToast({ message: 'User deleted successfully', type: 'success' });
                       }
                     }}

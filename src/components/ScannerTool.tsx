@@ -5,13 +5,14 @@ import { Toast, ToastType } from './Toast';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
-const SCANNER_KEYS = ['scanner1', 'scanner2'] as const;
+const SCANNER_KEYS = ['scanner1', 'scanner2', 'no_biometric'] as const;
 type ScannerKey = typeof SCANNER_KEYS[number];
-const DEFAULT_LABELS: Record<ScannerKey, string> = { scanner1: 'Scanner 1', scanner2: 'Scanner 2' };
-const OUTPUT_FILENAMES: Record<ScannerKey, string> = { scanner1: '1_attlog.xlsx', scanner2: '2_attlog.xlsx' };
+const DEFAULT_LABELS: Record<ScannerKey, string> = { scanner1: 'Scanner 1', scanner2: 'Scanner 2', no_biometric: 'No Biometric' };
+const OUTPUT_FILENAMES: Record<ScannerKey, string> = { scanner1: '1_attlog.xlsx', scanner2: '2_attlog.xlsx', no_biometric: 'no_biometric_attlog.xlsx' };
 
 interface Person {
   id: string;
+  empNo?: string;
   name: string;
   dept: string;
 }
@@ -37,12 +38,14 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   const [activeTab, setActiveTab] = useState<ScannerKey | 'convert'>('scanner1');
   const [data, setData] = useState<Record<ScannerKey, ScannerData>>({
     scanner1: { label: 'Scanner 1', people: [] },
-    scanner2: { label: 'Scanner 2', people: [] }
+    scanner2: { label: 'Scanner 2', people: [] },
+    no_biometric: { label: 'No Biometric', people: [] }
   });
   
   const [saveStatus, setSaveStatus] = useState<Record<ScannerKey, 'saved' | 'unsaved' | 'saving'>>({
     scanner1: 'saved',
-    scanner2: 'saved'
+    scanner2: 'saved',
+    no_biometric: 'saved'
   });
 
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
@@ -114,7 +117,14 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   };
 
   const addPerson = (key: ScannerKey) => {
-    setData(prev => ({ ...prev, [key]: { ...prev[key], people: [...prev[key].people, { id: Math.random().toString(36).slice(2, 10), name: '', dept: '' }] } }));
+    setData(prev => {
+      const next = { ...prev };
+      const people = next[key].people;
+      const defaultStart = key === 'no_biometric' ? 176 : 1;
+      const nextEmpNo = people.length > 0 ? (Math.max(...people.map(p => parseInt(p.empNo || '0', 10) || 0)) + 1).toString() : defaultStart.toString();
+      next[key] = { ...next[key], people: [...people, { id: Math.random().toString(36).slice(2, 10), empNo: nextEmpNo, name: '', dept: '' }] };
+      return next;
+    });
     markUnsaved(key);
   };
 
@@ -137,9 +147,10 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   };
 
 
-  const fileInputRefs = {
+  const fileInputRefs: Record<ScannerKey, React.RefObject<HTMLInputElement | null>> = {
     scanner1: useRef<HTMLInputElement>(null),
-    scanner2: useRef<HTMLInputElement>(null)
+    scanner2: useRef<HTMLInputElement>(null),
+    no_biometric: useRef<HTMLInputElement>(null)
   };
 
   const handleImportList = (key: ScannerKey) => {
@@ -168,7 +179,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
 
         const name = String(row.getCell(2).value || '');
         const dept = String(row.getCell(3).value || '');
-        newPeople.push({ id: Math.random().toString(36).slice(2, 10), name: name.trim(), dept: dept.trim() });
+        newPeople.push({ id: Math.random().toString(36).slice(2, 10), empNo: noVal || String(rowNumber - 1), name: name.trim(), dept: dept.trim() });
       });
 
       setData(prev => ({
@@ -194,7 +205,8 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       { header: 'Department/Office', width: 24 }
     ];
     scanner.people.forEach((p, idx) => {
-      ws.addRow([idx + 1, p.name || '', p.dept || '']);
+      const fallbackNo = key === 'no_biometric' ? (176 + idx).toString() : (idx + 1).toString();
+      ws.addRow([p.empNo || fallbackNo, p.name || '', p.dept || '']);
     });
     const buffer = await wb.xlsx.writeBuffer();
     const filename = (scanner.label || 'scanner').replace(/[^a-z0-9]+/gi, '_') + '_roster.xlsx';
@@ -272,7 +284,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     let matched = 0, unmatched = 0;
     const spec = userIds.map(uidNum => {
       const times = byUser.get(uidNum).slice().sort((a: Date, b: Date) => a.getTime() - b.getTime());
-      const person = people[uidNum - 1];
+      const person = people.find(p => p.empNo === String(uidNum)) || people[uidNum - 1];
       let name;
       if (person && person.name && person.name.trim()) { name = person.name.trim(); matched++; }
       else { name = `User ${uidNum}`; unmatched++; }
@@ -328,7 +340,10 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       const ws = wb.addWorksheet(finalName);
       ws.columns = [{ width: 8 }, { width: 22 }];
       item.records.forEach((rec: any) => {
-        const offsetDate = new Date(rec.dt.getTime() - rec.dt.getTimezoneOffset() * 60000);
+        let offsetDate: any = '';
+        if (rec.dt && typeof rec.dt.getTime === 'function') {
+          offsetDate = new Date(rec.dt.getTime() - rec.dt.getTimezoneOffset() * 60000);
+        }
         const row = ws.addRow([rec.userId, offsetDate]);
         const c1 = row.getCell(1), c2 = row.getCell(2);
         c1.font = { name: 'Arial', size: 11 };
@@ -342,7 +357,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   };
 
   const handleConvert = async () => {
-    if (!uploadedFile) return;
+    if (!uploadedFile && selectedScanner !== 'no_biometric') return;
     setIsConverting(true);
     setLogs([]);
     setBuiltWorkbookBuffer(null);
@@ -352,8 +367,23 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     };
 
     try {
-      const lower = uploadedFile.name.toLowerCase();
       let spec;
+      
+      if (!uploadedFile && selectedScanner === 'no_biometric') {
+        const people = data['no_biometric'].people;
+        if (people.length === 0) throw new Error('No Biometric roster is empty.');
+        
+        // Generate empty records for each person (pre-fill column A with their ID so they can easily type times)
+        spec = people.map(p => {
+          const userId = parseInt(p.empNo, 10);
+          return {
+            sheetName: p.name.trim() || `User ${p.empNo}`,
+            records: Array(10).fill(null).map(() => ({ userId, dt: '' }))
+          };
+        });
+        appendLog(`Generated blank workbook with ${spec.length} sheets from No Biometric roster.`, 'ok');
+      } else {
+        const lower = uploadedFile.name.toLowerCase();
       
       if (lower.endsWith('.dat')) {
         const text = await uploadedFile.text();
@@ -387,6 +417,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       } else {
         throw new Error('Unsupported file type.');
       }
+      } // close else block
 
       const buffer = await buildWorkbookFromSpec(spec);
       setBuiltWorkbookBuffer(buffer);
@@ -453,7 +484,15 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
               <tbody>
                 {scanner.people.map((p, idx) => (
                   <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                    <td className="py-2 px-4 text-sm font-mono text-gray-500">{idx + 1}</td>
+                    <td className="py-2 px-4">
+                      <input
+                        type="text"
+                        placeholder="No."
+                        value={p.empNo || (key === 'no_biometric' ? (176 + idx).toString() : (idx + 1).toString())}
+                        onChange={e => updatePerson(key, idx, 'empNo', e.target.value)}
+                        className="w-16 bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1.5 text-sm font-mono text-gray-500 outline-none transition-colors"
+                      />
+                    </td>
                     <td className="py-2 px-4">
                       <input
                         type="text"
@@ -531,6 +570,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
 
         {activeTab === 'scanner1' && renderRoster('scanner1')}
         {activeTab === 'scanner2' && renderRoster('scanner2')}
+        {activeTab === 'no_biometric' && renderRoster('no_biometric')}
 
         {activeTab === 'convert' && (
           <div className="bg-white rounded-b-xl rounded-tr-xl border border-gray-200 shadow-sm p-6 sm:p-8">
@@ -591,7 +631,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
 
             <div className="flex items-center gap-4">
               <button
-                disabled={!uploadedFile || isConverting}
+                disabled={(!uploadedFile && selectedScanner !== 'no_biometric') || isConverting}
                 onClick={handleConvert}
                 className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
               >

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, memo } from 'react';
 import { EmployeeAttendance, AttendanceRecord } from '../utils/excelParser';
-import { Download, Users, CheckCircle2 } from 'lucide-react';
+import { Download, Users, CheckCircle2, Fingerprint } from 'lucide-react';
 
 interface DTREditorProps {
   index: number;
@@ -50,6 +50,50 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
         return rYear === targetYear && rMonth === targetMonth && rDay === day;
       }
       return rDay === day;
+    });
+  };
+
+  const handleFillNoBiometric = () => {
+    let newRecords = [...editedRecords];
+    
+    days.forEach(day => {
+      let isWeekend = false;
+      if (targetYear !== -1 && targetMonth !== -1) {
+        const date = new Date(targetYear, targetMonth - 1, day);
+        if (date.getMonth() === targetMonth - 1) {
+          const dayOfWeek = date.getDay();
+          if (dayOfWeek === 0 || dayOfWeek === 6) isWeekend = true;
+        } else {
+          isWeekend = true; // invalid day
+        }
+      }
+
+      if (isWeekend) return;
+      
+      const dateStr = targetYear !== -1 && targetMonth !== -1 
+        ? `${targetYear}-${targetMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+        : `YYYY-MM-${day.toString().padStart(2, '0')}`;
+
+      const existingRecordIndex = newRecords.findIndex(r => r.date === dateStr);
+      if (existingRecordIndex !== -1) {
+        const r = { ...newRecords[existingRecordIndex] };
+        if (!r.amIn && !r.amOut && !r.pmIn && !r.pmOut) {
+          r.amIn = 'No Biometric';
+          newRecords[existingRecordIndex] = r;
+        }
+      } else {
+        newRecords.push({
+          date: dateStr,
+          amIn: 'No Biometric'
+        });
+      }
+    });
+
+    setEditedRecords(newRecords);
+    setIsSaved(false);
+    setDebouncedSave({
+      employeeIdOrName: editedName,
+      records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut)
     });
   };
 
@@ -188,6 +232,13 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
               <span className="text-gray-500 animate-pulse">Saving...</span>
             )}
           </div>
+          <button
+            onClick={handleFillNoBiometric}
+            className="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Fingerprint className="h-4 w-4 mr-2 text-gray-500" />
+            Fill No Biometric
+          </button>
           <button
             onClick={() => onDownload(employee)}
             className="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"

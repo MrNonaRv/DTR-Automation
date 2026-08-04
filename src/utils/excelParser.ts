@@ -69,60 +69,57 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
     const records: AttendanceRecord[] = [];
 
     for (const [dateStr, dailyScans] of Object.entries(groupedByDate)) {
-      // Filter out duplicate accidental scans (e.g., within 2 minutes)
+      // Filter out duplicate accidental scans (e.g., within 1 minute)
       const validScans: Date[] = [];
       for (const scan of dailyScans) {
         if (validScans.length === 0) {
           validScans.push(scan);
         } else {
           const lastScan = validScans[validScans.length - 1];
-          if (Math.abs(differenceInMinutes(scan, lastScan)) > 2) {
+          if (scan.getTime() - lastScan.getTime() > 60000) { // 1 minute
             validScans.push(scan);
           }
         }
       }
 
-      // Bucketing logic
-      // AM_IN: The earliest scan between 05:00 and 11:59.
-      // AM_OUT: The latest scan between 11:00 and 13:00.
-      // PM_IN: The earliest scan between 12:00 and 14:00.
-      // PM_OUT: The latest scan between 15:00 and 23:59.
-      
       let amIn: Date | null = null;
       let amOut: Date | null = null;
       let pmIn: Date | null = null;
       let pmOut: Date | null = null;
-
-      for (const scan of validScans) {
-        const hour = scan.getHours();
-        const timeVal = hour + scan.getMinutes() / 60;
-        
-        // AM IN (04:00 to 10:59)
-        if (timeVal >= 4 && timeVal < 11) {
-          if (!amIn) amIn = scan;
-        }
-        // PM OUT (15:00 to 23:59)
-        else if (timeVal >= 15 && timeVal < 24) {
-          pmOut = scan; // keep updating to the latest
-        }
-      }
-
-      // Middle scans (11:00 to 14:59)
-      const midScans = validScans.filter(s => {
-        const t = s.getHours() + s.getMinutes() / 60;
-        return t >= 11 && t < 15;
-      });
-
-      if (midScans.length === 1) {
-        const t = midScans[0].getHours() + midScans[0].getMinutes() / 60;
-        if (t < 12.5) {
-          amOut = midScans[0];
-        } else {
-          pmIn = midScans[0];
-        }
-      } else if (midScans.length >= 2) {
-        amOut = midScans[0];
-        pmIn = midScans[midScans.length - 1];
+      
+      if (validScans.length === 4) {
+         amIn = validScans[0];
+         amOut = validScans[1];
+         pmIn = validScans[2];
+         pmOut = validScans[3];
+      } else if (validScans.length === 2) {
+         const t0 = validScans[0].getHours() + validScans[0].getMinutes() / 60;
+         const t1 = validScans[1].getHours() + validScans[1].getMinutes() / 60;
+         if (t0 < 12 && t1 >= 12) {
+             amIn = validScans[0];
+             pmOut = validScans[1];
+         } else if (t0 < 12 && t1 < 12) {
+             amIn = validScans[0];
+             amOut = validScans[1];
+         } else {
+             pmIn = validScans[0];
+             pmOut = validScans[1];
+         }
+      } else {
+         for (const scan of validScans) {
+             const t = scan.getHours() + scan.getMinutes()/60;
+             if (t < 11) {
+                 if (!amIn) amIn = scan;
+             } else if (t >= 11 && t < 13) {
+                 if (!amOut) amOut = scan;
+                 else if (!pmIn) pmIn = scan;
+             } else if (t >= 13 && t < 15) {
+                 if (!pmIn) pmIn = scan;
+                 else if (!amOut && t < 13.5) amOut = scan; 
+             } else {
+                 pmOut = scan; // Keep updating to the latest scan for PM Out
+             }
+         }
       }
 
       records.push({

@@ -147,10 +147,19 @@ export async function generateDTR(
           const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
 
           if (isDateInRange) {
-            doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
-            doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
-            doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
-            doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
+            const hasNoBiometric = [amInVal, amOutVal, pmInVal, pmOutVal].some(v => v.toLowerCase() === 'no biometric');
+            
+            if (hasNoBiometric) {
+              const combinedWidth = cols[4] + colW[4] - cols[1];
+              doc.fontSize(7);
+              doc.text("NO BIOMETRIC", cols[1], y + 5, { width: combinedWidth, align: "center" });
+              doc.fontSize(8);
+            } else {
+              doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
+              doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
+              doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
+              doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
+            }
           }
 
           y += rowHeight;
@@ -352,10 +361,19 @@ export async function generateAllDTRs(
           const fieldPrefix = `${safeEmpName}_${startX}_day_${i}`;
 
           if (isDateInRange) {
-            doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
-            doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
-            doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
-            doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
+            const hasNoBiometric = [amInVal, amOutVal, pmInVal, pmOutVal].some(v => v.toLowerCase() === 'no biometric');
+            
+            if (hasNoBiometric) {
+              const combinedWidth = cols[4] + colW[4] - cols[1];
+              doc.fontSize(7);
+              doc.text("NO BIOMETRIC", cols[1], y + 5, { width: combinedWidth, align: "center" });
+              doc.fontSize(8);
+            } else {
+              doc.text(amInVal, cols[1], y + 4, { width: colW[1], align: "center" });
+              doc.text(amOutVal, cols[2], y + 4, { width: colW[2], align: "center" });
+              doc.text(pmInVal, cols[3], y + 4, { width: colW[3], align: "center" });
+              doc.text(pmOutVal, cols[4], y + 4, { width: colW[4], align: "center" });
+            }
           }
 
           y += rowHeight;
