@@ -20,6 +20,10 @@ service cloud.firestore {
     match /dtr_records/{recordId} {
       allow read, write: if true;
     }
+
+    match /scanner_configs/{configId} {
+      allow read, write: if true;
+    }
     
     match /{document=**} {
       allow read, write: if false;

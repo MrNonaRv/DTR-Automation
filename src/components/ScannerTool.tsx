@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UploadCloud, File as FileIcon, CheckCircle2, AlertCircle, Download, X, Plus } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { Toast, ToastType } from './Toast';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const SCANNER_KEYS = ['scanner1', 'scanner2'] as const;
 type ScannerKey = typeof SCANNER_KEYS[number];
@@ -35,23 +37,28 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   });
 
   const saveTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const dataRef = useRef(data);
 
   useEffect(() => {
-    // Load from localStorage
-    const loadData = () => {
+    dataRef.current = data;
+  }, [data]);
+
+  useEffect(() => {
+    // Load from firestore
+    const loadData = async () => {
       const loaded = { ...data };
       for (const key of SCANNER_KEYS) {
         try {
-          const val = localStorage.getItem(`attendance-system:${key}`);
-          if (val) {
-            const parsed = JSON.parse(val);
+          const docSnap = await getDoc(doc(db, 'scanner_configs', key));
+          if (docSnap.exists()) {
+            const parsed = docSnap.data();
             loaded[key] = {
               label: parsed.label || DEFAULT_LABELS[key],
               people: Array.isArray(parsed.people) ? parsed.people : []
             };
           }
         } catch (e) {
-          // keep default
+          console.error("Failed to load scanner config", e);
         }
       }
       setData(loaded);
@@ -62,53 +69,48 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   const markUnsaved = (key: ScannerKey) => {
     setSaveStatus(prev => ({ ...prev, [key]: 'unsaved' }));
     if (saveTimerRef.current[key]) clearTimeout(saveTimerRef.current[key]);
-    saveTimerRef.current[key] = setTimeout(() => persist(key), 900);
+    saveTimerRef.current[key] = setTimeout(() => persist(key), 1200);
   };
 
-  const persist = (key: ScannerKey, customData?: Record<ScannerKey, ScannerData>) => {
+  const persist = async (key: ScannerKey, customData?: Record<ScannerKey, ScannerData>) => {
     try {
-      const dataToSave = customData ? customData[key] : data[key];
-      localStorage.setItem(`attendance-system:${key}`, JSON.stringify(dataToSave));
+      setSaveStatus(prev => ({ ...prev, [key]: 'saving' }));
+      const dataToSave = customData ? customData[key] : dataRef.current[key];
+      await setDoc(doc(db, 'scanner_configs', key), dataToSave);
       setSaveStatus(prev => ({ ...prev, [key]: 'saved' }));
     } catch (e) {
       console.error('Storage error:', e);
+      setToast({ message: 'Failed to sync to cloud', type: 'error' });
+      setSaveStatus(prev => ({ ...prev, [key]: 'unsaved' }));
     }
   };
 
   const updateLabel = (key: ScannerKey, label: string) => {
-    setData(prev => {
-      const next = { ...prev, [key]: { ...prev[key], label } };
-      markUnsaved(key);
-      return next;
-    });
+    setData(prev => ({ ...prev, [key]: { ...prev[key], label } }));
+    markUnsaved(key);
   };
 
   const addPerson = (key: ScannerKey) => {
-    setData(prev => {
-      const next = { ...prev, [key]: { ...prev[key], people: [...prev[key].people, { id: Math.random().toString(36).slice(2, 10), name: '', dept: '' }] } };
-      markUnsaved(key);
-      return next;
-    });
+    setData(prev => ({ ...prev, [key]: { ...prev[key], people: [...prev[key].people, { id: Math.random().toString(36).slice(2, 10), name: '', dept: '' }] } }));
+    markUnsaved(key);
   };
 
   const updatePerson = (key: ScannerKey, index: number, field: keyof Person, value: string) => {
     setData(prev => {
       const people = [...prev[key].people];
       people[index] = { ...people[index], [field]: value };
-      const next = { ...prev, [key]: { ...prev[key], people } };
-      markUnsaved(key);
-      return next;
+      return { ...prev, [key]: { ...prev[key], people } };
     });
+    markUnsaved(key);
   };
 
   const removePerson = (key: ScannerKey, index: number) => {
     setData(prev => {
       const people = [...prev[key].people];
       people.splice(index, 1);
-      const next = { ...prev, [key]: { ...prev[key], people } };
-      markUnsaved(key);
-      return next;
+      return { ...prev, [key]: { ...prev[key], people } };
     });
+    markUnsaved(key);
   };
 
 

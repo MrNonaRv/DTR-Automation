@@ -106,6 +106,22 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
     return time;
   };
 
+  const [debouncedSave, setDebouncedSave] = useState<{ employeeIdOrName: string; records: AttendanceRecord[] } | null>(null);
+
+  useEffect(() => {
+    if (debouncedSave) {
+      const timer = setTimeout(() => {
+        onUpdate(index, {
+          ...employee,
+          employeeIdOrName: debouncedSave.employeeIdOrName,
+          records: debouncedSave.records
+        });
+        setIsSaved(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [debouncedSave, index, employee, onUpdate]);
+
   const handleRecordChange = (day: number, field: keyof AttendanceRecord, value: string) => {
     const existingRecord = getRecordForDay(day);
     const dateStr = targetYear !== -1 && targetMonth !== -1 
@@ -121,13 +137,11 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
     setEditedRecords(newRecords);
     setIsSaved(false);
     
-    // Auto-save immediately
-    onUpdate(index, {
-      ...employee,
+    // Auto-save debounced
+    setDebouncedSave({
       employeeIdOrName: editedName,
       records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut)
     });
-    setTimeout(() => setIsSaved(true), 800);
   };
 
   const handleRecordBlur = (day: number, field: keyof AttendanceRecord, value: string) => {
@@ -145,13 +159,11 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
     setEditedName(newName);
     setIsSaved(false);
     
-    // Auto-save immediately
-    onUpdate(index, {
-      ...employee,
+    // Auto-save debounced
+    setDebouncedSave({
       employeeIdOrName: newName,
       records: editedRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut)
     });
-    setTimeout(() => setIsSaved(true), 800);
   };
 
   

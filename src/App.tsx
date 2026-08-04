@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
-import { ScannerTool } from './components/ScannerTool';
 import { Toast } from './components/Toast';
-import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
+const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
 
 const toTitleCase = (str: string) => {
   if (!str) return str;
@@ -26,41 +26,28 @@ export default function App() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showScannerTool, setShowScannerTool] = useState(false);
   const [showUploadUI, setShowUploadUI] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'dtr_records'), (snapshot) => {
-      const records: EmployeeAttendance[] = [];
-      snapshot.forEach((docSnap) => {
-         records.push({ id: docSnap.id, ...docSnap.data() } as EmployeeAttendance);
-      });
-      records.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-        return timeA - timeB;
-      });
-      setParsedData(records.length > 0 ? records : null);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    const checkUpdate = async () => {
-      try {
-        const res = await fetch('/api/check-update');
-        const data = await res.json();
-        if (data.updateAvailable) {
-          setUpdateAvailable(true);
-        }
-      } catch (e) {
-        console.error("Failed to check for updates");
+  const checkUpdate = async (manual = false) => {
+    try {
+      if (manual) setToast({ message: 'Checking for updates...', type: 'info' });
+      const res = await fetch('/api/check-update');
+      const data = await res.json();
+      if (data.updateAvailable) {
+        setUpdateAvailable(true);
+        if (manual) setToast({ message: 'System update available!', type: 'success' });
+      } else {
+        if (manual) setToast({ message: 'System is up to date.', type: 'info' });
       }
-    };
-    
+    } catch (e) {
+      console.error("Failed to check for updates");
+      if (manual) setToast({ message: 'Failed to check for updates.', type: 'error' });
+    }
+  };
+
+  useEffect(() => {
     // Check on mount and every hour
     checkUpdate();
     const interval = setInterval(checkUpdate, 60 * 60 * 1000);
@@ -152,24 +139,15 @@ export default function App() {
       const result = await response.json();
       const formattedData = result.data.map((emp: EmployeeAttendance) => ({
         ...emp,
+        id: Math.random().toString(36).substring(2, 9),
         employeeIdOrName: toTitleCase(emp.employeeIdOrName)
       }));
       
-      const batch = writeBatch(db);
-      formattedData.forEach((emp: EmployeeAttendance) => {
-        const newRef = doc(collection(db, 'dtr_records'));
-        batch.set(newRef, {
-          employeeIdOrName: emp.employeeIdOrName,
-          records: emp.records,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          userId: 'anonymous'
-        });
-      });
-      await batch.commit();
+      setParsedData(formattedData);
       
-      setToast({ message: 'DTR Data uploaded and synced to cloud.', type: 'success' });
+      setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
+      setShowEditor(true);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
       setToast({ message: err.message || 'An error occurred during upload.', type: 'error' });
@@ -270,14 +248,12 @@ export default function App() {
   };
 
   const handleUpdateEmployee = React.useCallback(async (idx: number, updatedEmp: EmployeeAttendance) => {
-    if (updatedEmp.id) {
-       await setDoc(doc(db, 'dtr_records', updatedEmp.id), {
-         employeeIdOrName: updatedEmp.employeeIdOrName,
-         records: updatedEmp.records,
-         updatedAt: serverTimestamp(),
-         userId: 'anonymous'
-       }, { merge: true });
-    }
+    setParsedData(prev => {
+      if (!prev) return null;
+      const next = [...prev];
+      next[idx] = updatedEmp;
+      return next;
+    });
   }, []);
 
   const handleDownloadEmployeeDTR = React.useCallback((emp: EmployeeAttendance) => {
@@ -299,12 +275,25 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            {updateAvailable && (
+              <button 
+                onClick={handleUpdate} 
+                disabled={isUpdating}
+                className="flex items-center text-sm font-medium text-white transition-colors bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg border border-blue-600 shadow-sm disabled:opacity-50"
+              >
+                {isUpdating ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                {isUpdating ? 'Updating...' : 'Install Update'}
+              </button>
+            )}
+            <button onClick={() => checkUpdate(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200" title="Check for updates and sync">
+              <RefreshCw className="w-4 h-4 mr-2" /> Check Updates
+            </button>
             <button onClick={() => setShowScannerTool(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200">
               <Users className="w-4 h-4 mr-2" /> Scanner Tool
             </button>
             <div className="hidden sm:flex items-center text-xs font-medium text-gray-500 bg-gray-50 px-2.5 py-1 rounded-full border border-gray-200">
               <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
-              System Active
+              Local State
             </div>
           </div>
         </div>
@@ -336,7 +325,7 @@ export default function App() {
           </div>
         )}
 
-        {!parsedData && !showUploadUI && (
+        {!showEditor && !showUploadUI && (
           <div className="max-w-4xl mx-auto space-y-8 mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center space-y-4 mb-10">
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Simplify Your DTR Generation</h2>
@@ -372,6 +361,16 @@ export default function App() {
                   <h3 className="text-2xl font-bold text-gray-900 mb-3">2. Generate DTR</h3>
                   <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
                 </div>
+                
+                {parsedData && parsedData.length > 0 ? (
+                  <button 
+                    onClick={() => setShowEditor(true)}
+                    className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium text-base transition-colors w-full shadow-sm mb-3"
+                  >
+                    <CheckCircle2 className="w-5 h-5 mr-2" /> View Synced Data ({parsedData.length} records)
+                  </button>
+                ) : null}
+
                 <button 
                   onClick={() => setShowUploadUI(true)}
                   className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-gray-900 rounded-xl hover:bg-gray-800 font-medium text-base transition-colors w-full"
@@ -389,6 +388,7 @@ export default function App() {
                       userId: 'anonymous'
                     });
                     setCurrentIndex(0);
+                    setShowEditor(true);
                   }}
                   className="mt-3 inline-flex items-center justify-center px-5 py-3 border border-gray-300 text-gray-700 bg-white rounded-xl hover:bg-gray-50 font-medium text-base transition-colors w-full"
                 >
@@ -399,7 +399,7 @@ export default function App() {
           </div>
         )}
 
-        {!parsedData && showUploadUI && (
+        {!showEditor && showUploadUI && (
           <div className="max-w-4xl mx-auto mt-12 mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="mb-6 flex">
               <button 
@@ -492,7 +492,7 @@ export default function App() {
           </div>
         )}
         
-        {parsedData && (
+        {showEditor && parsedData && (
           <div className="space-y-6">
             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -502,9 +502,15 @@ export default function App() {
                     <CheckCircle2 className="w-5 h-5 text-green-500 mr-2" />
                     Parsed Results
                   </h2>
-                  <div className="mt-3 flex items-center space-x-4">
-                    <button onClick={handleReset} className="text-sm text-blue-600 hover:text-blue-800 underline font-medium">
-                      Upload a different file
+                  <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                    <button 
+                      onClick={() => {
+                        setShowEditor(false);
+                      }} 
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors w-full sm:w-auto"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1.5" />
+                      Back to Menu
                     </button>
                     <button 
                       onClick={async () => {
@@ -520,33 +526,34 @@ export default function App() {
                           setCurrentIndex(parsedData.length);
                         }
                       }} 
-                      className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors w-full sm:w-auto"
                     >
+                      <Plus className="w-4 h-4 mr-1.5" />
                       Add a new user
                     </button>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">Found {parsedData.length} employees in the dataset.</p>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                  <div className="space-y-1.5">
-                    <label htmlFor="period" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">Period</label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                  <div className="space-y-2">
+                    <label htmlFor="period" className="block text-sm font-bold text-gray-700 uppercase tracking-wider">Period</label>
                     <input
                       type="text"
                       id="period"
                       value={period}
                       onChange={(e) => setPeriod(e.target.value)}
-                      className="block w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      className="block w-full px-5 py-3 border border-gray-300 rounded-xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
                       placeholder="e.g. July 2026"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="printRange" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">Print Range</label>
+                  <div className="space-y-2">
+                    <label htmlFor="printRange" className="block text-sm font-bold text-gray-700 uppercase tracking-wider">Print Range</label>
                     <select
                       id="printRange"
                       value={printRange}
                       onChange={(e) => setPrintRange(e.target.value as any)}
-                      className="block w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
+                      className="block w-full px-5 py-3 border border-gray-300 rounded-xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
                     >
                       <option value="full">Whole Month</option>
                       <option value="1-15">Days 1-15</option>
@@ -555,26 +562,21 @@ export default function App() {
                   </div>
                   <button
                     onClick={handleDownloadAllDTRs}
-                    className="inline-flex items-center justify-center px-5 py-2 h-[38px] bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center px-8 py-3 min-h-[52px] bg-blue-600 text-white text-lg font-bold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-all shadow-md active:scale-[0.98]"
                   >
-                    <Download className="h-4 w-4 mr-2" />
+                    <Download className="h-6 w-6 mr-3" />
                     Generate All DTRs
                   </button>
                   <button
                     onClick={async () => {
-                      if (confirm("Are you sure you want to clear all DTR records across all devices?")) {
-                        const batch = writeBatch(db);
-                        parsedData?.forEach(emp => {
-                          if (emp.id) {
-                            batch.delete(doc(db, 'dtr_records', emp.id));
-                          }
-                        });
-                        await batch.commit();
+                      if (confirm("Are you sure you want to clear all DTR records?")) {
                         setParsedData(null);
                         setFile(null);
+                        setShowEditor(false);
+                        setToast({ message: 'All records cleared successfully.', type: 'success' });
                       }
                     }}
-                    className="inline-flex items-center justify-center px-5 py-2 h-[38px] bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-sm ml-3"
+                    className="inline-flex items-center justify-center px-8 py-3 min-h-[52px] bg-red-600 text-white text-lg font-bold rounded-xl hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-500/50 transition-all shadow-md active:scale-[0.98] sm:ml-2"
                   >
                     Clear All
                   </button>
@@ -593,7 +595,7 @@ export default function App() {
                 Previous
               </button>
               
-              <div className="flex-1 flex justify-center px-4 w-full">
+              <div className="flex-1 flex justify-center px-4 w-full gap-2 items-center">
                 <select
                   value={currentIndex}
                   onChange={(e) => setCurrentIndex(Number(e.target.value))}
@@ -605,6 +607,27 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                
+                {parsedData[currentIndex] && (
+                  <button
+                    onClick={() => {
+                      const emp = parsedData[currentIndex];
+                      if (confirm(`Are you sure you want to delete ${emp.employeeIdOrName}?`)) {
+                        setParsedData(prev => {
+                          if (!prev) return null;
+                          const next = prev.filter((_, i) => i !== currentIndex);
+                          return next.length > 0 ? next : null;
+                        });
+                        setCurrentIndex(prev => Math.max(0, prev - 1));
+                        setToast({ message: 'User deleted successfully', type: 'success' });
+                      }
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 flex-shrink-0"
+                    title="Delete User"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
               <button
@@ -633,7 +656,11 @@ export default function App() {
           </div>
         )}
       </main>
-      {showScannerTool && <ScannerTool onClose={() => setShowScannerTool(false)} />}
+      {showScannerTool && (
+        <Suspense fallback={<div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm"><div className="bg-white p-6 rounded-xl shadow-xl"><RefreshCw className="w-8 h-8 text-blue-600 animate-spin" /></div></div>}>
+          <ScannerTool onClose={() => setShowScannerTool(false)} />
+        </Suspense>
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
