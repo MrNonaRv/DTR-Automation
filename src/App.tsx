@@ -20,7 +20,22 @@ export default function App() {
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [period, setPeriod] = useState<string>('July 2026'); // Default or input
+  const [period, setPeriod] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  }); // YYYY-MM format
+
+  const getFormattedPeriod = () => {
+    if (!period) return '';
+    try {
+      const [year, month] = period.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch {
+      return period;
+    }
+  };
+
   const [printRange, setPrintRange] = useState<'full' | '1-15' | '16-31'>('full');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -166,7 +181,7 @@ export default function App() {
         },
         body: JSON.stringify({
           employeeName: emp.employeeIdOrName,
-          period: period,
+          period: getFormattedPeriod(),
           records: emp.records,
           printRange: printRange,
         }),
@@ -215,7 +230,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          period: period,
+          period: getFormattedPeriod(),
           employees: parsedData.map(emp => ({
             employeeName: emp.employeeIdOrName,
             records: emp.records
@@ -601,12 +616,11 @@ export default function App() {
                   <div className="space-y-2">
                     <label htmlFor="period" className="block text-sm font-bold text-gray-700 uppercase tracking-wider">Period</label>
                     <input
-                      type="text"
+                      type="month"
                       id="period"
                       value={period}
                       onChange={(e) => setPeriod(e.target.value)}
                       className="block w-full px-5 py-3 border border-gray-300 rounded-xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
-                      placeholder="e.g. July 2026"
                     />
                   </div>
                   <div className="space-y-2">
@@ -714,7 +728,8 @@ export default function App() {
                   key={currentIndex}
                   index={currentIndex}
                   employee={parsedData[currentIndex]}
-                  period={period}
+                  period={getFormattedPeriod()}
+                  printRange={printRange}
                   onUpdate={handleUpdateEmployee}
                   onDownload={handleDownloadEmployeeDTR}
                 />

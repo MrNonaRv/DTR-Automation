@@ -6,6 +6,7 @@ interface DTREditorProps {
   index: number;
   employee: EmployeeAttendance;
   period: string;
+  printRange?: 'full' | '1-15' | '16-31';
   onUpdate: (index: number, updatedEmployee: EmployeeAttendance) => void;
   onDownload: (employee: EmployeeAttendance) => void;
 }
@@ -17,7 +18,7 @@ const toTitleCase = (str: string) => {
     return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
   });
 };
-export const DTREditor = memo(function DTREditor({ index, employee, period, onUpdate, onDownload }: DTREditorProps) {
+export const DTREditor = memo(function DTREditor({ index, employee, period, printRange = 'full', onUpdate, onDownload }: DTREditorProps) {
   const [editedName, setEditedName] = useState(employee.employeeIdOrName);
   const [editedRecords, setEditedRecords] = useState<AttendanceRecord[]>(employee.records);
   const [isSaved, setIsSaved] = useState(true);
@@ -274,7 +275,9 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, onUp
             </div>
             <div className="flex items-end border-b border-gray-400 pb-1">
               <span className="italic font-bold text-xs sm:text-sm mr-2 whitespace-nowrap">For the period of:</span>
-              <span className="flex-1 text-sm sm:text-base outline-none bg-transparent">{period}</span>
+              <span className="flex-1 text-sm sm:text-base outline-none bg-transparent">
+                {period}{printRange !== 'full' ? <span className="ml-12">{printRange}</span> : null}
+              </span>
             </div>
           </div>
 

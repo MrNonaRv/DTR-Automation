@@ -59,7 +59,8 @@ export async function generateDTR(
         // Period
         doc.fontSize(9).font("Helvetica-Oblique").font("Helvetica-BoldOblique");
         doc.text("For the period of:", leftX + 4, y + 5);
-        doc.font("Helvetica").text(period, leftX + 90, y + 5);
+        const displayPeriod = printRange === 'full' ? period : `${period}            ${printRange}`;
+        doc.font("Helvetica").text(displayPeriod, leftX + 90, y + 5);
         
         y += 18;
         // Line above table
@@ -274,7 +275,8 @@ export async function generateAllDTRs(
         // Period
         doc.fontSize(9).font("Helvetica-Oblique").font("Helvetica-BoldOblique");
         doc.text("For the period of:", leftX + 4, y + 5);
-        doc.font("Helvetica").text(period, leftX + 90, y + 5);
+        const displayPeriod = printRange === 'full' ? period : `${period}            ${printRange}`;
+        doc.font("Helvetica").text(displayPeriod, leftX + 90, y + 5);
         
         y += 18;
         // Line above table
@@ -422,6 +424,9 @@ export async function generateAllDTRs(
         doc.rect(startX, startY, width, y - startY).stroke();
       }
 
+      const logoPath = path.join(process.cwd(), "Systemlogo.jpg");
+      const hasLogo = fs.existsSync(logoPath);
+      
       for (let i = 0; i < employees.length; i += 2) {
         if (i > 0) {
           doc.addPage();
