@@ -172,14 +172,22 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       }
 
       const newPeople: Person[] = [];
+            const getCellStr = (cell: any) => {
+        if (!cell || cell.value === null || cell.value === undefined) return '';
+        if (typeof cell.value === 'object') {
+          if ('richText' in cell.value) return cell.value.richText.map((rt: any) => rt.text).join('');
+          if ('result' in cell.value) return String(cell.value.result);
+        }
+        return String(cell.value);
+      };
+
       ws.eachRow((row, rowNumber) => {
-        const noVal = String(row.getCell(1).value || '').trim();
+        const noVal = getCellStr(row.getCell(1)).trim();
         // Skip header
         if (rowNumber === 1 && noVal.toLowerCase() === 'no.') return;
-
-        const name = String(row.getCell(2).value || '');
-        const dept = String(row.getCell(3).value || '');
-        newPeople.push({ id: Math.random().toString(36).slice(2, 10), empNo: noVal || String(rowNumber - 1), name: name.trim(), dept: dept.trim() });
+        const name = getCellStr(row.getCell(2)).trim();
+        const dept = getCellStr(row.getCell(3)).trim();
+        newPeople.push({ id: Math.random().toString(36).slice(2, 10), empNo: noVal || String(rowNumber - 1), name: name, dept: dept });
       });
 
       setData(prev => ({
@@ -290,16 +298,41 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       if (!byUser.has(r.userId)) byUser.set(r.userId, []);
       byUser.get(r.userId).push(r.dt);
     }
+
     const userIds = Array.from(byUser.keys()).sort((a, b) => a - b);
     let matched = 0, unmatched = 0;
-    const spec = userIds.map(uidNum => {
+
+    const spec = userIds.map((uidNum) => {
       const times = byUser.get(uidNum).slice().sort((a: Date, b: Date) => a.getTime() - b.getTime());
-      const person = people.find(p => parseInt(p.empNo, 10) === uidNum);
+      
+      const person = people.find((p, idx) => {
+        const empNoStr = String(p.empNo || '').trim();
+        const pIdNum = parseInt(empNoStr, 10);
+        if (!isNaN(pIdNum) && pIdNum === uidNum) return true;
+        if (empNoStr === String(uidNum)) return true;
+        
+        // If the ID was missing or corrupted, check if its auto-numbered index matches
+        // e.g. if the user didn't have numbers in their Excel sheet, the UI defaults to idx + 1
+        // Scanner 2 doesn't have an auto-number offset like 'no_biometric' (176), so it defaults to idx + 1
+        const fallbackNum = selectedScanner === 'no_biometric' ? (176 + idx) : (idx + 1);
+        if (fallbackNum === uidNum) return true;
+        
+        return false;
+      });
+      
       let name;
-      if (person && person.name && person.name.trim()) { name = person.name.trim(); matched++; }
-      else { name = `User ${uidNum}`; unmatched++; }
+      if (person && person.name && String(person.name).trim() && String(person.name).trim() !== '[object Object]') { 
+         name = String(person.name).trim(); 
+         matched++; 
+      }
+      else { 
+         name = `User ${uidNum}`; 
+         unmatched++; 
+      }
+
       return { sheetName: name, records: times.map((dt: Date) => ({ userId: uidNum, dt })) };
     });
+
     return { spec, matched, unmatched, totalPunches: records.length };
   };
 
