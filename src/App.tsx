@@ -250,8 +250,29 @@ export default function App() {
       // Create a temporary link to trigger download
       const link = document.createElement('a');
       link.href = url;
-      const formattedPeriod = period ? `_${period.replace(/\s+/g, '_')}` : "";
-      link.setAttribute('download', `All_DTRs${formattedPeriod}.pdf`);
+            let downloadFileName = "All_DTR.pdf";
+      if (period) {
+        try {
+          const [year, month] = period.split('-');
+          const y = parseInt(year);
+          const m = parseInt(month);
+          const dateObj = new Date(y, m - 1, 1);
+          const monthName = dateObj.toLocaleDateString('en-US', { month: 'long' });
+          const lastDay = new Date(y, m, 0).getDate();
+          
+          let dateRangeStr = `1-${lastDay}`;
+          if (printRange === '1-15') {
+            dateRangeStr = '1-15';
+          } else if (printRange === '16-31') {
+            dateRangeStr = `16-${lastDay}`;
+          }
+          
+          downloadFileName = `All_DTR_${monthName}_${dateRangeStr}_${y}.pdf`;
+        } catch(e) {
+          downloadFileName = `All_DTR_${period}_${printRange}.pdf`;
+        }
+      }
+      link.setAttribute('download', downloadFileName);
       document.body.appendChild(link);
       link.click();
       
