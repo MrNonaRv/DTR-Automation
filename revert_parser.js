@@ -1,4 +1,5 @@
-import * as xlsx from "xlsx";
+const fs = require('fs');
+const content = `import * as xlsx from "xlsx";
 import { format, parse, isValid, differenceInMinutes, parseISO } from "date-fns";
 
 export interface AttendanceRecord {
@@ -136,3 +137,5 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
 
   return allEmployeesAttendance;
 }
+`;
+fs.writeFileSync('src/utils/excelParser.ts', content);

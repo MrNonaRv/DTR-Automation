@@ -255,7 +255,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   };
 
   const parseDateTimeString = (s: string) => {
-    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    const m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})/);
     if (!m) return null;
     const y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], se = +m[6];
     return new Date(y, mo - 1, d, h, mi, se);
@@ -265,11 +265,21 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
     const records = [];
     for (const line of lines) {
+      // Handle both tab-separated and space-separated formats natively
+      const match = line.trim().match(/^(\d+)[\s,]+(\d{4}[-/]\d{1,2}[-/]\d{1,2}[\sT]+\d{1,2}:\d{2}:\d{2})/);
+      if (match) {
+        const userId = parseInt(match[1], 10);
+        const dt = parseDateTimeString(match[2].replace(/[\/]/g, '-').replace('T', ' '));
+        if (!isNaN(userId) && dt) records.push({ userId, dt });
+        continue;
+      }
+      // Fallback
       const parts = line.split('\t');
-      if (parts.length < 2) continue;
-      const userId = parseInt(parts[0], 10);
-      const dt = parseDateTimeString(parts[1].trim());
-      if (!isNaN(userId) && dt) records.push({ userId, dt });
+      if (parts.length >= 2) {
+        const userId = parseInt(parts[0], 10);
+        const dt = parseDateTimeString(parts[1].trim());
+        if (!isNaN(userId) && dt) records.push({ userId, dt });
+      }
     }
     return records;
   };
@@ -284,7 +294,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     let matched = 0, unmatched = 0;
     const spec = userIds.map(uidNum => {
       const times = byUser.get(uidNum).slice().sort((a: Date, b: Date) => a.getTime() - b.getTime());
-      const person = people.find(p => p.empNo === String(uidNum)) || people[uidNum - 1];
+      const person = people.find(p => parseInt(p.empNo, 10) === uidNum);
       let name;
       if (person && person.name && person.name.trim()) { name = person.name.trim(); matched++; }
       else { name = `User ${uidNum}`; unmatched++; }
@@ -408,7 +418,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         
         setRecentFiles(prev => {
           const next = [newFile, ...prev].slice(0, 10); // Keep last 10
-          setDoc(doc(db, 'scanner_configs', 'recent_files_v1'), { files: next }).catch(err => {
+          setDoc(doc(db, 'scanner_configs', 'recent_files_v1'), { files: next.map(f => ({ ...f, content: '' })) }).catch(err => {
             console.error('Failed to save recent files to firestore', err);
           });
           return next;
@@ -576,7 +586,12 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
           <div className="bg-white rounded-b-xl rounded-tr-xl border border-gray-200 shadow-sm p-6 sm:p-8">
             
             <div className="mb-8">
-              <label className="block text-xs font-mono font-semibold text-gray-500 uppercase tracking-wider mb-3">1 &mdash; Which scanner is this file from?</label>
+              <div className="flex justify-between items-end mb-3">
+                <label className="block text-xs font-mono font-semibold text-gray-500 uppercase tracking-wider">1 &mdash; Which scanner is this file from?</label>
+              </div>
+              <p className="text-sm text-gray-500 mb-4 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                <strong className="text-blue-700">Heads up:</strong> Biometric <code className="font-mono text-xs">.dat</code> files only contain ID numbers. To see real names in your Excel export, ensure you've filled out the roster in the corresponding <strong>Scanner Tab</strong> above before converting!
+              </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 {SCANNER_KEYS.map(key => (
                   <button
@@ -664,6 +679,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                           {new Date(file.uploadedAt).toLocaleString()} &mdash; {data[file.scannerKey]?.label || file.scannerKey} &mdash; {(file.size / 1024).toFixed(1)} KB
                         </div>
                       </div>
+                      {file.content ? (
                       <button
                         onClick={() => {
                           const blob = new Blob([file.content], { type: 'text/plain' });
@@ -681,6 +697,11 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                         <Download className="w-4 h-4 mr-2" />
                         Download Raw
                       </button>
+                    ) : (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1.5 rounded-md border border-gray-200">
+                        Available during upload session
+                      </span>
+                    )}
                     </div>
                   ))}
                 </div>
