@@ -52,7 +52,7 @@ export default function App() {
   const [printRange, setPrintRange] = useState<'full' | '1-15' | '16-31'>('full');
   const [userRange, setUserRange] = useState<string>('');
   const [autoFillUsers, setAutoFillUsers] = useState<string>('');
-  const [autoFillType, setAutoFillType] = useState<'straight' | 'normal'>('straight');
+  const [autoFillType, setAutoFillType] = useState<'straight' | 'normal'>('normal');
   const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '10_day_mon_fri' | '15_day_all'>('full_month_weekdays');
   const [autoFillTrigger, setAutoFillTrigger] = useState(0);
   const [showAutoFill, setShowAutoFill] = useState(false);
@@ -940,6 +940,7 @@ export default function App() {
                       onChange={(e) => setAutoFillUsers(e.target.value)}
                       className="block w-full sm:w-64 px-4 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-lg placeholder:text-gray-400"
                     />
+
                     <select
                       value={autoFillSchedule}
                       onChange={(e) => setAutoFillSchedule(e.target.value as any)}
