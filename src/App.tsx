@@ -1,9 +1,10 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { UploadCloud, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
+import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
+import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
-import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
@@ -17,10 +18,22 @@ const toTitleCase = (str: string) => {
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(null);
+  const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(() => {
+    try {
+      const saved = localStorage.getItem('dtr_parsedData');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Failed to load parsedData from localStorage', e);
+    }
+    return null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [period, setPeriod] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('dtr_period');
+      if (saved) return saved;
+    } catch(e) {}
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
   }); // YYYY-MM format
@@ -37,13 +50,52 @@ export default function App() {
   };
 
   const [printRange, setPrintRange] = useState<'full' | '1-15' | '16-31'>('full');
+  const [userRange, setUserRange] = useState<string>('');
+  const [autoFillUsers, setAutoFillUsers] = useState<string>('');
+  const [autoFillType, setAutoFillType] = useState<'straight' | 'normal'>('straight');
+  const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '10_day_mon_fri' | '15_day_all'>('full_month_weekdays');
+  const [autoFillTrigger, setAutoFillTrigger] = useState(0);
+  const [showAutoFill, setShowAutoFill] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showScannerTool, setShowScannerTool] = useState(false);
   const [showUploadUI, setShowUploadUI] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showEditor, setShowEditor] = useState(() => {
+    return !!localStorage.getItem('dtr_parsedData');
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingBlank, setIsCreatingBlank] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  useEffect(() => {
+    if (parsedData) {
+      localStorage.setItem('dtr_parsedData', JSON.stringify(parsedData));
+    } else {
+      localStorage.removeItem('dtr_parsedData');
+    }
+  }, [parsedData]);
+  
+  useEffect(() => {
+    if (period) localStorage.setItem('dtr_period', period);
+  }, [period]);
+
+  const loadSavedSessions = async () => {
+    try {
+      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(5));
+      const snap = await getDocs(q);
+      const sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setSavedSessions(sessions);
+    } catch (e) {
+      console.error("Failed to load saved sessions", e);
+    }
+  };
+
+  useEffect(() => {
+    loadSavedSessions();
+  }, []);
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const checkUpdate = async (manual = false) => {
@@ -172,6 +224,149 @@ export default function App() {
     }
   };
 
+
+  const handleAutoFill = () => {
+    if (!parsedData) return;
+    
+    // Parse target user indices (1-based)
+    const targetIndices = new Set<number>();
+    if (autoFillUsers.trim().toLowerCase() === 'all' || autoFillUsers.trim() === '') {
+      parsedData.forEach((emp, idx) => targetIndices.add(emp.empNo !== undefined ? Number(emp.empNo) : idx + 1));
+    } else {
+      const parts = autoFillUsers.split(',');
+      for (const p of parts) {
+        const str = p.trim();
+        if (!str) continue;
+        const match = str.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+        if (match) {
+           const start = parseInt(match[1], 10);
+           const end = match[2] ? parseInt(match[2], 10) : start;
+           for (let i = start; i <= end; i++) targetIndices.add(i);
+        } else {
+           const num = parseInt(str, 10);
+           if (!isNaN(num)) targetIndices.add(num);
+        }
+      }
+    }
+    
+    if (targetIndices.size === 0) {
+      setToast({ message: "Please specify valid users (e.g., 1, 2, 3, 15-20, or 'all').", type: 'error' });
+      return;
+    }
+
+    // Determine year/month from period
+    let targetYear = -1, targetMonth = -1;
+    if (period) {
+      const parts = period.split('-');
+      if (parts.length === 2) {
+        targetYear = parseInt(parts[0], 10);
+        targetMonth = parseInt(parts[1], 10);
+      }
+    }
+
+    const newData = [...parsedData];
+    let filledCount = 0;
+
+    for (let i = 0; i < newData.length; i++) {
+      const userIdentifier = newData[i].empNo !== undefined ? Number(newData[i].empNo) : i + 1;
+      if (!targetIndices.has(userIdentifier)) continue;
+      
+      const emp = newData[i];
+      let newRecords = [...emp.records];
+      
+      const daysInMonth = (targetYear !== -1 && targetMonth !== -1) ? new Date(targetYear, targetMonth, 0).getDate() : 31;
+      let dutyDaysCount = 0;
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        
+        let skipDay = false;
+        if (targetYear !== -1 && targetMonth !== -1) {
+          const date = new Date(targetYear, targetMonth - 1, day);
+          if (date.getMonth() === targetMonth - 1) {
+            const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon...6=Sat
+            
+            if (autoFillSchedule === 'full_month_weekdays' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+            if (autoFillSchedule === '10_day_mon_fri' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+            if (autoFillSchedule === '8_day_mon_thu' && (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6)) skipDay = true;
+            
+          } else {
+            skipDay = true;
+          }
+        }
+        
+        if ((autoFillSchedule === '8_day_mon_thu' || autoFillSchedule === '10_day_mon_fri' || autoFillSchedule === '15_day_all') && day > 15) {
+          skipDay = true;
+        }
+
+        if (skipDay) continue;
+
+        // If we reach here, this day is a valid duty day for this schedule
+        dutyDaysCount++;
+        
+        // Stop if we hit max days based on schedule
+        if (autoFillSchedule === '8_day_mon_thu' && dutyDaysCount > 8) break;
+        if (autoFillSchedule === '10_day_mon_fri' && dutyDaysCount > 10) break;
+        if (autoFillSchedule === '15_day_all' && dutyDaysCount > 15) break;
+        
+        const dateStr = targetYear !== -1 && targetMonth !== -1 
+          ? `${targetYear}-${targetMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+          : `YYYY-MM-${day.toString().padStart(2, '0')}`;
+          
+        const existingRecordIndex = newRecords.findIndex(r => r.date === dateStr);
+        
+        const getRandomTime = (baseHr: number, minOffset: number, maxOffset: number) => {
+          const offset = Math.floor(Math.random() * (maxOffset - minOffset + 1)) + minOffset;
+          let h = baseHr;
+          let m = offset;
+          if (m < 0) {
+            h -= 1;
+            m += 60;
+          } else if (m >= 60) {
+            h += 1;
+            m -= 60;
+          }
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          let h12 = h % 12;
+          if (h12 === 0) h12 = 12;
+          return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+        };
+
+        const timeIn = getRandomTime(8, -15, -1); // 07:45 AM - 07:59 AM
+        const amOutTime = autoFillType === 'straight' ? '' : getRandomTime(12, 1, 5); // 12:01 PM - 12:05 PM
+        const pmInTime = autoFillType === 'straight' ? '' : getRandomTime(13, -10, -1); // 12:50 PM - 12:59 PM
+        const pmOutTime = getRandomTime(17, 1, 10); // 05:01 PM - 05:10 PM
+
+        if (existingRecordIndex !== -1) {
+          const r = { ...newRecords[existingRecordIndex] };
+          let changed = false;
+          if (!r.amIn) { r.amIn = timeIn; changed = true; }
+          if (!r.amOut && amOutTime) { r.amOut = amOutTime; changed = true; }
+          if (!r.pmIn && pmInTime) { r.pmIn = pmInTime; changed = true; }
+          if (!r.pmOut && pmOutTime) { r.pmOut = pmOutTime; changed = true; }
+          if (changed) {
+            newRecords[existingRecordIndex] = r;
+            filledCount++;
+          }
+        } else {
+          newRecords.push({
+            date: dateStr,
+            amIn: timeIn,
+            amOut: amOutTime,
+            pmIn: pmInTime,
+            pmOut: pmOutTime
+          });
+          filledCount++;
+        }
+      }
+      
+      newData[i] = { ...emp, records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut) };
+    }
+    
+    setParsedData(newData);
+    setAutoFillTrigger(prev => prev + 1);
+    setToast({ message: `Auto-filled ${filledCount} missing records across selected users.`, type: 'success' });
+  };
+
   const handleDownloadDTR = async (emp: EmployeeAttendance) => {
     try {
       const response = await fetch('/api/generate-dtr', {
@@ -223,6 +418,33 @@ export default function App() {
 
   const handleDownloadAllDTRs = async () => {
     if (!parsedData) return;
+    
+    let employeesToProcess = parsedData;
+    
+    if (userRange.trim()) {
+      const match = userRange.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+      if (match) {
+        const start = parseInt(match[1], 10);
+        const end = match[2] ? parseInt(match[2], 10) : start;
+        
+        const targetIndices = new Set<number>();
+        for (let i = start; i <= end; i++) targetIndices.add(i);
+        
+        employeesToProcess = parsedData.filter((emp, idx) => {
+          const userIdentifier = emp.empNo !== undefined ? Number(emp.empNo) : idx + 1;
+          return targetIndices.has(userIdentifier);
+        });
+        
+        if (employeesToProcess.length === 0) {
+           setToast({ message: "No users matched the specified range.", type: 'error' });
+           return;
+        }
+      } else {
+        setToast({ message: "Invalid user range format. Use '1-15' or '5'.", type: 'error' });
+        return;
+      }
+    }
+
     try {
       const response = await fetch('/api/generate-all-dtrs', {
         method: 'POST',
@@ -231,7 +453,7 @@ export default function App() {
         },
         body: JSON.stringify({
           period: getFormattedPeriod(),
-          employees: parsedData.map(emp => ({
+          employees: employeesToProcess.map(emp => ({
             employeeName: emp.employeeIdOrName,
             records: emp.records
           })),
@@ -267,10 +489,12 @@ export default function App() {
             dateRangeStr = `16-${lastDay}`;
           }
           
-          downloadFileName = `All_DTR_${monthName}_${dateRangeStr}_${y}.pdf`;
+          downloadFileName = `All_DTR_${monthName}_${dateRangeStr}_${y}${userRange.trim() ? `_Users_${userRange.trim()}` : ''}.pdf`;
         } catch(e) {
-          downloadFileName = `All_DTR_${period}_${printRange}.pdf`;
+          downloadFileName = `All_DTR_${period}_${printRange}${userRange.trim() ? `_Users_${userRange.trim()}` : ''}.pdf`;
         }
+      } else if (userRange.trim()) {
+         downloadFileName = `All_DTR_Users_${userRange.trim()}.pdf`;
       }
       link.setAttribute('download', downloadFileName);
       document.body.appendChild(link);
@@ -398,6 +622,33 @@ export default function App() {
                   <h3 className="text-2xl font-bold text-gray-900 mb-3">2. Generate DTR</h3>
                   <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
                 </div>
+
+                {savedSessions.length > 0 && (
+                  <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Recent Saved DTRs</h4>
+                    <div className="space-y-2">
+                      {savedSessions.map(session => (
+                        <button
+                          key={session.id}
+                          onClick={() => {
+                            if (confirm("Load this session? Any unsaved changes in your current view will be lost.")) {
+                              setParsedData(session.data);
+                              if (session.period) setPeriod(session.period);
+                              setShowEditor(true);
+                            }
+                          }}
+                          className="w-full text-left px-4 py-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all flex items-center justify-between"
+                        >
+                          <div>
+                            <div className="font-semibold text-gray-900">{session.name}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{session.data?.length || 0} records</div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {parsedData && parsedData.length > 0 ? (
                   <button 
@@ -425,10 +676,7 @@ export default function App() {
                       if (docSnap.exists()) {
                         const parsed = docSnap.data();
                         if (Array.isArray(parsed.people) && parsed.people.length > 0) {
-                          newEmployees = parsed.people.map(p => ({
-                            employeeIdOrName: p.name ? p.name.trim() : `User ${p.empNo}`,
-                            records: []
-                          }));
+                          newEmployees = parsed.people.map((p, idx) => { const assignedNo = p.empNo || (176 + idx); return { employeeIdOrName: p.name ? p.name.trim() : `User ${assignedNo}`, empNo: assignedNo, records: [] }; });
                         }
                       }
                     } catch (e) {
@@ -452,11 +700,7 @@ export default function App() {
                         updatedAt: serverTimestamp(),
                         userId: 'anonymous'
                       });
-                      parsedDataArray.push({
-                        id: newRef.id,
-                        employeeIdOrName: emp.employeeIdOrName,
-                        records: []
-                      });
+                      parsedDataArray.push({ id: newRef.id, employeeIdOrName: emp.employeeIdOrName, empNo: emp.empNo, records: [] });
                     }
                     
                     setParsedData(parsedDataArray);
@@ -577,111 +821,147 @@ export default function App() {
         {showEditor && parsedData && (
           <div className="space-y-6">
             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex flex-col gap-6 mb-6">
                 
-                <div>
-                  <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 mr-2" />
-                    Parsed Results
-                  </h2>
-                  <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                {/* Top Section: Title & Actions */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center">
+                      <CheckCircle2 className="w-6 h-6 text-green-500 mr-2" />
+                      Parsed Results
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">Found {parsedData.length} employees in the dataset.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
                     <button 
-                      onClick={() => {
-                        setShowEditor(false);
-                      }} 
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors w-full sm:w-auto"
+                      onClick={() => setShowHelp(true)}
+                      className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <HelpCircle className="w-4 h-4 mr-1.5" />
+                      Help & Guide
+                    </button>
+                    <button 
+                      onClick={() => setShowEditor(false)} 
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4 mr-1.5" />
                       Back to Menu
                     </button>
+                    <button
+                      onClick={async () => {
+                        const sessionName = prompt("Enter a name for this session (e.g. 'Aug 2026')");
+                        if (!sessionName) return;
+                        setIsSaving(true);
+                        try {
+                          await setDoc(doc(collection(db, 'dtr_sessions'), Date.now().toString()), {
+                            name: sessionName,
+                            period: period,
+                            data: parsedData,
+                            updatedAt: serverTimestamp()
+                          });
+                          setToast({ message: "Progress saved to cloud!", type: "success" });
+                          loadSavedSessions();
+                        } catch (e) {
+                          setToast({ message: "Failed to save progress.", type: "error" });
+                        } finally {
+                          setIsSaving(false);
+                        }
+                      }}
+                      disabled={isSaving}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      <Save className="w-4 h-4 mr-1.5" />
+                      {isSaving ? "Saving..." : "Save to Cloud"}
+                    </button>
                     <button 
                       onClick={async () => {
                         const newRef = doc(collection(db, 'dtr_records'));
-                        await setDoc(newRef, {
-                          employeeIdOrName: 'New Employee',
-                          records: [],
-                          createdAt: serverTimestamp(),
-                          updatedAt: serverTimestamp(),
-                          userId: 'anonymous'
-                        });
-                        
-                        const newEmp = {
-                          id: newRef.id,
-                          employeeIdOrName: 'New Employee',
-                          records: []
-                        };
-                        
-                        setParsedData(prev => {
-                          if (prev) {
-                            return [...prev, newEmp];
-                          }
-                          return [newEmp];
-                        });
-                        
-                        if (parsedData) {
-                          setCurrentIndex(parsedData.length);
-                        } else {
-                          setCurrentIndex(0);
-                        }
+                        await setDoc(newRef, { employeeIdOrName: 'New Employee', records: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), userId: 'anonymous' });
+                        const newEmp = { id: newRef.id, employeeIdOrName: 'New Employee', records: [] };
+                        setParsedData(prev => prev ? [...prev, newEmp] : [newEmp]);
+                        setCurrentIndex(parsedData ? parsedData.length : 0);
                       }} 
-                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors w-full sm:w-auto"
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                     >
                       <Plus className="w-4 h-4 mr-1.5" />
                       Add a new user
                     </button>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">Found {parsedData.length} employees in the dataset.</p>
                 </div>
-                
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                  <div className="space-y-2">
-                    <label htmlFor="period" className="block text-sm font-bold text-gray-700 uppercase tracking-wider">Period</label>
-                    <input
-                      type="month"
-                      id="period"
-                      value={period}
-                      onChange={(e) => setPeriod(e.target.value)}
-                      className="block w-full px-5 py-3 border border-gray-300 rounded-xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
-                    />
+
+                {/* Batch Generator Section */}
+                <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 flex items-center">
+                    <Printer className="w-4 h-4 mr-2 text-gray-500" />
+                    Batch Generation Settings
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                    <div className="space-y-1.5">
+                      <label htmlFor="period" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Period</label>
+                      <input type="month" id="period" value={period} onChange={(e) => setPeriod(e.target.value)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="printRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Range</label>
+                      <select id="printRange" value={printRange} onChange={(e) => setPrintRange(e.target.value as any)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="full">Whole Month</option>
+                        <option value="1-15">Days 1-15</option>
+                        <option value="16-31">Days 16-31</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="userRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Users (e.g. 1-15)</label>
+                      <input type="text" id="userRange" placeholder="All Users" value={userRange} onChange={(e) => setUserRange(e.target.value)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white placeholder:text-gray-400" />
+                    </div>
+                    <div className="lg:col-span-2 flex items-center gap-3">
+                      <button onClick={handleDownloadAllDTRs} className="flex-1 inline-flex items-center justify-center px-6 py-2.5 min-h-[46px] bg-blue-600 text-white text-base font-bold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm">
+                        <Download className="h-5 w-5 mr-2" />
+                        Generate PDFs
+                      </button>
+                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label htmlFor="printRange" className="block text-sm font-bold text-gray-700 uppercase tracking-wider">Print Range</label>
-                    <select
-                      id="printRange"
-                      value={printRange}
-                      onChange={(e) => setPrintRange(e.target.value as any)}
-                      className="block w-full px-5 py-3 border border-gray-300 rounded-xl text-lg font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
-                    >
-                      <option value="full">Whole Month</option>
-                      <option value="1-15">Days 1-15</option>
-                      <option value="16-31">Days 16-31</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={handleDownloadAllDTRs}
-                    className="inline-flex items-center justify-center px-8 py-3 min-h-[52px] bg-blue-600 text-white text-lg font-bold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-all shadow-md active:scale-[0.98]"
-                  >
-                    <Download className="h-6 w-6 mr-3" />
-                    Generate All DTRs
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (confirm("Are you sure you want to clear all DTR records?")) {
-                        setParsedData(null);
-                        setFile(null);
-                        setShowEditor(false);
-                        setToast({ message: 'All records cleared successfully.', type: 'success' });
-                      }
-                    }}
-                    className="inline-flex items-center justify-center px-8 py-3 min-h-[52px] bg-red-600 text-white text-lg font-bold rounded-xl hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-500/50 transition-all shadow-md active:scale-[0.98] sm:ml-2"
-                  >
-                    Clear All
-                  </button>
                 </div>
+
               </div>
+
+              {parsedData.length > 0 && (
+                <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between bg-blue-50/50 border border-blue-100 p-4 rounded-xl">
+                  <div className="flex items-center text-blue-900 mb-4 sm:mb-0">
+                    <Activity className="w-5 h-5 mr-3 text-blue-600" />
+                    <span className="font-semibold text-sm">Automated Duty Auto-Fill</span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <input
+                      type="text"
+                      placeholder="e.g. 1-5, 8 or 'all'"
+                      value={autoFillUsers}
+                      onChange={(e) => setAutoFillUsers(e.target.value)}
+                      className="block w-full sm:w-64 px-4 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-lg placeholder:text-gray-400"
+                    />
+                    <select
+                      value={autoFillSchedule}
+                      onChange={(e) => setAutoFillSchedule(e.target.value as any)}
+                      className="block w-full sm:w-auto pl-3 pr-8 py-2 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-lg"
+                    >
+                      <option value="none">No Rule - Leave Blank</option>
+                      <option value="full_month_mon_fri">Whole Month (Mon-Fri)</option>
+                      <option value="8_day_mon_thu">8 Days (1st-15th, Mon-Thu)</option>
+                      <option value="10_day_mon_fri">10 Days (1st-15th, Mon-Fri)</option>
+                      <option value="15_day_all">15 Days (1st-15th, Mon-Sun)</option>
+                    </select>
+                    <button
+                      onClick={handleAutoFill}
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-colors whitespace-nowrap"
+                    >
+                      Apply Auto-Fill
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            
+
             <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 space-y-4 sm:space-y-0">
               <button
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
@@ -700,7 +980,7 @@ export default function App() {
                 >
                   {parsedData.map((emp, idx) => (
                     <option key={idx} value={idx}>
-                      {idx + 1}. {emp.employeeIdOrName}
+                      {emp.empNo !== undefined ? emp.empNo : idx + 1}. {emp.employeeIdOrName}
                     </option>
                   ))}
                 </select>
@@ -746,9 +1026,10 @@ export default function App() {
             <div className="grid grid-cols-1 gap-6">
               {parsedData.length > 0 && (
                 <DTREditor
-                  key={currentIndex}
+                  key={`${currentIndex}-${autoFillTrigger}`}
                   index={currentIndex}
                   employee={parsedData[currentIndex]}
+                  autoFillTrigger={autoFillTrigger}
                   period={getFormattedPeriod()}
                   printRange={printRange}
                   onUpdate={handleUpdateEmployee}
@@ -759,6 +1040,7 @@ export default function App() {
           </div>
         )}
       </main>
+      {showHelp && <HelpGuide onClose={() => setShowHelp(false)} />}
       {showScannerTool && (
         <Suspense fallback={<div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm"><div className="bg-white p-6 rounded-xl shadow-xl"><RefreshCw className="w-8 h-8 text-blue-600 animate-spin" /></div></div>}>
           <ScannerTool onClose={() => setShowScannerTool(false)} />

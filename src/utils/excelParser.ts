@@ -38,9 +38,9 @@ export function parseBiometricLogs(fileBuffer: Buffer): EmployeeAttendance[] {
       // Excel date serial number to JS Date if it comes as number
       let dateObj: Date | null = null;
       if (valB instanceof Date) {
-        // xlsx cellDates: true returns UTC dates where the UTC time is the face value time.
-        // Shift it to local time so that getHours() returns the face value hour
-        dateObj = new Date(valB.getUTCFullYear(), valB.getUTCMonth(), valB.getUTCDate(), valB.getUTCHours(), valB.getUTCMinutes(), valB.getUTCSeconds());
+        // xlsx with cellDates: true returns a JS Date where the *local time* represents the face value.
+        // So valB.getHours() will correctly yield the face value hour regardless of timezone.
+        dateObj = valB;
       } else if (typeof valB === 'number') {
         const utcDate = new Date(Math.round((valB - 25569) * 86400 * 1000));
         dateObj = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate(), utcDate.getUTCHours(), utcDate.getUTCMinutes(), utcDate.getUTCSeconds());

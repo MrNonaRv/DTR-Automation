@@ -9,6 +9,7 @@ interface DTREditorProps {
   printRange?: 'full' | '1-15' | '16-31';
   onUpdate: (index: number, updatedEmployee: EmployeeAttendance) => void;
   onDownload: (employee: EmployeeAttendance) => void;
+  autoFillTrigger?: number;
 }
 
 
@@ -18,10 +19,17 @@ const toTitleCase = (str: string) => {
     return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
   });
 };
-export const DTREditor = memo(function DTREditor({ index, employee, period, printRange = 'full', onUpdate, onDownload }: DTREditorProps) {
+export const DTREditor = memo(function DTREditor({ index, employee, period, printRange = 'full', onUpdate, onDownload, autoFillTrigger = 0 }: DTREditorProps) {
   const [editedName, setEditedName] = useState(employee.employeeIdOrName);
   const [editedRecords, setEditedRecords] = useState<AttendanceRecord[]>(employee.records);
   const [isSaved, setIsSaved] = useState(true);
+
+  useEffect(() => {
+    if (autoFillTrigger > 0) {
+      setEditedName(employee.employeeIdOrName);
+      setEditedRecords(employee.records);
+    }
+  }, [autoFillTrigger, employee]);
 
   // Generate 31 days
   const days = Array.from({ length: 31 }, (_, i) => i + 1);

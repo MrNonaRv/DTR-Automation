@@ -350,15 +350,21 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         const userIdNum = typeof a === 'number' ? a : parseInt(a as string, 10);
         let dt: any = b;
         if (dt && typeof dt === 'object' && dt.result !== undefined) dt = dt.result;
-        if (!(dt instanceof Date)) {
-          if (typeof dt === 'number') {
-            // Handle Excel serial date
-            dt = new Date(Math.round((dt - 25569) * 86400 * 1000));
-          } else if (typeof dt === 'string') { 
+        if (dt instanceof Date) {
+          // ExcelJS returns dates in UTC representing face value. Convert to local time face value.
+          dt = new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate(), dt.getUTCHours(), dt.getUTCMinutes(), dt.getUTCSeconds());
+        } else if (typeof dt === 'number') {
+          // Handle Excel serial date
+          const utcDate = new Date(Math.round((dt - 25569) * 86400 * 1000));
+          dt = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate(), utcDate.getUTCHours(), utcDate.getUTCMinutes(), utcDate.getUTCSeconds());
+        } else if (typeof dt === 'string') { 
+          const m = String(dt).match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})/);
+          if (m) dt = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+          else {
             const parsed = new Date(dt); if (!isNaN(parsed.getTime())) dt = parsed; else return; 
           }
-          else return;
         }
+        else return;
         if (isNaN(userIdNum) || isNaN(dt.getTime())) return;
         records.push({ userId: userIdNum, dt });
       });
