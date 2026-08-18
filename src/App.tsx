@@ -17,6 +17,9 @@ const toTitleCase = (str: string) => {
 };
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => localStorage.getItem('dtr_sessionId'));
+  const [currentSessionName, setCurrentSessionName] = useState<string>(() => localStorage.getItem('dtr_sessionName') || '');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(() => {
     try {
@@ -53,7 +56,7 @@ export default function App() {
   const [userRange, setUserRange] = useState<string>('');
   const [autoFillUsers, setAutoFillUsers] = useState<string>('');
   const [autoFillType, setAutoFillType] = useState<'straight' | 'normal'>('normal');
-  const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '10_day_mon_fri' | '15_day_all'>('full_month_weekdays');
+  const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '9_day_mon_fri' | '10_day_mon_fri' | '11_day_all' | '12_day_all' | '13_day_all' | '14_day_all' | '15_day_all'>('full_month_weekdays');
   const [autoFillTrigger, setAutoFillTrigger] = useState(0);
   const [showAutoFill, setShowAutoFill] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -286,7 +289,7 @@ export default function App() {
             const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon...6=Sat
             
             if (autoFillSchedule === 'full_month_weekdays' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
-            if (autoFillSchedule === '10_day_mon_fri' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+            if ((autoFillSchedule === '9_day_mon_fri' || autoFillSchedule === '10_day_mon_fri') && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
             if (autoFillSchedule === '8_day_mon_thu' && (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6)) skipDay = true;
             
           } else {
@@ -294,7 +297,7 @@ export default function App() {
           }
         }
         
-        if ((autoFillSchedule === '8_day_mon_thu' || autoFillSchedule === '10_day_mon_fri' || autoFillSchedule === '15_day_all') && day > 15) {
+        if (autoFillSchedule !== 'full_month_weekdays' && autoFillSchedule !== 'none' && day > 15) {
           skipDay = true;
         }
 
@@ -305,7 +308,12 @@ export default function App() {
         
         // Stop if we hit max days based on schedule
         if (autoFillSchedule === '8_day_mon_thu' && dutyDaysCount > 8) break;
+        if (autoFillSchedule === '9_day_mon_fri' && dutyDaysCount > 9) break;
         if (autoFillSchedule === '10_day_mon_fri' && dutyDaysCount > 10) break;
+        if (autoFillSchedule === '11_day_all' && dutyDaysCount > 11) break;
+        if (autoFillSchedule === '12_day_all' && dutyDaysCount > 12) break;
+        if (autoFillSchedule === '13_day_all' && dutyDaysCount > 13) break;
+        if (autoFillSchedule === '14_day_all' && dutyDaysCount > 14) break;
         if (autoFillSchedule === '15_day_all' && dutyDaysCount > 15) break;
         
         const dateStr = targetYear !== -1 && targetMonth !== -1 
@@ -602,8 +610,8 @@ export default function App() {
                   <div className="w-14 h-14 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-6">
                     <Users className="w-7 h-7" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">1. Prepare Data</h3>
-                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Convert raw .dat files from your biometric scanner into clean Excel workbooks organized by employee name.</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Step 1: Get Scanner Data</h3>
+                  <p className="text-gray-500 mb-6 text-base leading-relaxed">First, convert the raw fingerprint scanner file into an Excel workbook.</p>
                 </div>
                 <button 
                   onClick={() => setShowScannerTool(true)}
@@ -619,8 +627,8 @@ export default function App() {
                   <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
                     <File className="w-7 h-7" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">2. Generate DTR</h3>
-                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload the formatted Excel workbook to review attendance records and generate individual or bulk PDF reports.</p>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Step 2: Edit & Print DTRs</h3>
+                  <p className="text-gray-500 mb-6 text-base leading-relaxed">Upload your Excel workbook here to fix missing times, auto-fill days, and print the PDF forms.</p>
                 </div>
 
                 {savedSessions.length > 0 && (
@@ -661,12 +669,18 @@ export default function App() {
                 )}
                 
                 {parsedData && parsedData.length > 0 ? (
-                  <button 
-                    onClick={() => setShowEditor(true)}
-                    className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-white bg-blue-600 rounded-xl hover:bg-blue-700 font-medium text-base transition-colors w-full shadow-sm mb-3"
-                  >
-                    <CheckCircle2 className="w-5 h-5 mr-2" /> View Synced Data ({parsedData.length} records)
-                  </button>
+                  <div className="mb-5 p-6 bg-green-50 border-2 border-green-400 rounded-2xl shadow-sm">
+                    <h4 className="text-xl font-bold text-green-900 mb-2 flex items-center">
+                      <CheckCircle2 className="w-6 h-6 mr-2 text-green-600" /> You have active work!
+                    </h4>
+                    <p className="text-base text-green-800 mb-5">Don't worry, your current progress is safely auto-saved on this computer.</p>
+                    <button 
+                      onClick={() => setShowEditor(true)}
+                      className="inline-flex items-center justify-center px-5 py-4 text-white bg-green-600 rounded-xl hover:bg-green-700 font-bold text-xl transition-all w-full shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                    >
+                      Continue Where I Left Off
+                    </button>
+                  </div>
                 ) : null}
 
                 <button 
@@ -857,31 +871,18 @@ export default function App() {
                       <ChevronLeft className="w-4 h-4 mr-1.5" />
                       Back to Menu
                     </button>
-                    <button
-                      onClick={async () => {
-                        const sessionName = prompt("Enter a name for this session (e.g. 'Aug 2026')");
-                        if (!sessionName) return;
-                        setIsSaving(true);
-                        try {
-                          await setDoc(doc(collection(db, 'dtr_sessions'), Date.now().toString()), {
-                            name: sessionName,
-                            period: period,
-                            data: parsedData,
-                            updatedAt: serverTimestamp()
-                          });
-                          setToast({ message: "Progress saved to cloud!", type: "success" });
-                          loadSavedSessions();
-                        } catch (e) {
-                          setToast({ message: "Failed to save progress.", type: "error" });
-                        } finally {
-                          setIsSaving(false);
+                    <button 
+                      onClick={() => {
+                        const newName = prompt("Rename your saved file:", currentSessionName);
+                        if (newName) {
+                          setCurrentSessionName(newName);
+                          setToast({ message: "File renamed! Auto-saving...", type: "success" });
                         }
                       }}
-                      disabled={isSaving}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                      className="inline-flex items-center px-4 py-2 border border-green-200 rounded-lg shadow-sm text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
                     >
-                      <Save className="w-4 h-4 mr-1.5" />
-                      {isSaving ? "Saving..." : "Save to Cloud"}
+                      <Save className="w-4 h-4 mr-1.5 text-green-600" />
+                      {autoSaveStatus === 'saving' ? "Saving to Cloud..." : autoSaveStatus === 'saved' ? `Cloud Saved: ${currentSessionName}` : "Rename File"}
                     </button>
                     <button 
                       onClick={async () => {
@@ -959,7 +960,12 @@ export default function App() {
                       <option value="none">No Rule - Leave Blank</option>
                       <option value="full_month_mon_fri">Whole Month (Mon-Fri)</option>
                       <option value="8_day_mon_thu">8 Days (1st-15th, Mon-Thu)</option>
+                      <option value="9_day_mon_fri">9 Days (1st-15th, Mon-Fri)</option>
                       <option value="10_day_mon_fri">10 Days (1st-15th, Mon-Fri)</option>
+                      <option value="11_day_all">11 Days (1st-15th, Any Day)</option>
+                      <option value="12_day_all">12 Days (1st-15th, Any Day)</option>
+                      <option value="13_day_all">13 Days (1st-15th, Any Day)</option>
+                      <option value="14_day_all">14 Days (1st-15th, Any Day)</option>
                       <option value="15_day_all">15 Days (1st-15th, Mon-Sun)</option>
                     </select>
                     <button
