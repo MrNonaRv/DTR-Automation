@@ -49,6 +49,15 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   }
 
   const getRecordForDay = (day: number) => {
+    let inTargetRange = false;
+    if (printRange === 'full') {
+       inTargetRange = true;
+    } else {
+       if (printRange === '1-15' && day <= 15) inTargetRange = true;
+       if (printRange === '16-31' && day >= 16) inTargetRange = true;
+    }
+    if (!inTargetRange) return null;
+
     return editedRecords.find(r => {
       const parts = r.date.split("-");
       if (parts.length < 3) return false;
@@ -310,44 +319,39 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
             </thead>
             <tbody>
               {days.map(day => {
+                let inTargetRange = false;
+                if (printRange === 'full') {
+                   inTargetRange = true;
+                } else {
+                   if (printRange === '1-15' && day <= 15) inTargetRange = true;
+                   if (printRange === '16-31' && day >= 16) inTargetRange = true;
+                }
                 const record = getRecordForDay(day);
                 return (
                   <tr key={day}>
                     <td className="border border-gray-800 font-semibold py-0.5">{day}</td>
                     <td className="border border-gray-800 p-0">
-                      <input 
-                        type="text" 
-                        value={record?.amIn || ''} 
-                        onChange={(e) => handleRecordChange(day, 'amIn', e.target.value)}
+                      <input type="text" disabled={!inTargetRange} value={record?.amIn || ''} onChange={(e) => handleRecordChange(day, 'amIn', e.target.value)}
                         onBlur={(e) => handleRecordBlur(day, 'amIn', e.target.value)}
-                        className="w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors"
+                        className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
-                      <input 
-                        type="text" 
-                        value={record?.amOut || ''} 
-                        onChange={(e) => handleRecordChange(day, 'amOut', e.target.value)}
+                      <input type="text" disabled={!inTargetRange} value={record?.amOut || ''} onChange={(e) => handleRecordChange(day, 'amOut', e.target.value)}
                         onBlur={(e) => handleRecordBlur(day, 'amOut', e.target.value)}
-                        className="w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors"
+                        className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
-                      <input 
-                        type="text" 
-                        value={record?.pmIn || ''} 
-                        onChange={(e) => handleRecordChange(day, 'pmIn', e.target.value)}
+                      <input type="text" disabled={!inTargetRange} value={record?.pmIn || ''} onChange={(e) => handleRecordChange(day, 'pmIn', e.target.value)}
                         onBlur={(e) => handleRecordBlur(day, 'pmIn', e.target.value)}
-                        className="w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors"
+                        className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
-                      <input 
-                        type="text" 
-                        value={record?.pmOut || ''} 
-                        onChange={(e) => handleRecordChange(day, 'pmOut', e.target.value)}
+                      <input type="text" disabled={!inTargetRange} value={record?.pmOut || ''} onChange={(e) => handleRecordChange(day, 'pmOut', e.target.value)}
                         onBlur={(e) => handleRecordBlur(day, 'pmOut', e.target.value)}
-                        className="w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors"
+                        className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0 bg-gray-50/50">

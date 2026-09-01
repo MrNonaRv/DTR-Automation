@@ -237,7 +237,6 @@ export default function App() {
     if (autoFillUsers.trim().toLowerCase() === 'all') {
       parsedData.forEach((emp, idx) => targetIndices.add(emp.empNo !== undefined ? Number(emp.empNo) : idx + 1));
     } else if (autoFillUsers.trim() === '') {
-      // If blank, only apply to the currently viewed user in the editor
       const currentEmp = parsedData[currentIndex];
       if (currentEmp) {
         targetIndices.add(currentEmp.empNo !== undefined ? Number(currentEmp.empNo) : currentIndex + 1);
@@ -264,7 +263,6 @@ export default function App() {
       return;
     }
 
-    // Determine year/month from period
     let targetYear = -1, targetMonth = -1;
     if (period) {
       const parts = period.split('-');
@@ -287,70 +285,84 @@ export default function App() {
       const daysInMonth = (targetYear !== -1 && targetMonth !== -1) ? new Date(targetYear, targetMonth, 0).getDate() : 31;
       let dutyDaysCount = 0;
       
-      for (let day = 1; day <= daysInMonth; day++) {
-        
-        let skipDay = false;
-        if (targetYear !== -1 && targetMonth !== -1) {
-          const date = new Date(targetYear, targetMonth - 1, day);
-          if (date.getMonth() === targetMonth - 1) {
-            const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon...6=Sat
-            
-            if (autoFillSchedule === 'full_month_weekdays' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
-            if ((autoFillSchedule === '9_day_mon_fri' || autoFillSchedule === '10_day_mon_fri') && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
-            if (autoFillSchedule === '8_day_mon_thu' && (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6)) skipDay = true;
-            
-          } else {
-            skipDay = true;
+      const targetDatesToKeep = new Set<string>();
+
+      if (autoFillSchedule !== 'none') {
+        for (let day = 1; day <= daysInMonth; day++) {
+          let skipDay = false;
+          if (targetYear !== -1 && targetMonth !== -1) {
+            const date = new Date(targetYear, targetMonth - 1, day);
+            if (date.getMonth() === targetMonth - 1) {
+              const dayOfWeek = date.getDay();
+              if (autoFillSchedule === 'full_month_weekdays' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+              if ((autoFillSchedule === '9_day_mon_fri' || autoFillSchedule === '10_day_mon_fri') && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+              if (autoFillSchedule === '8_day_mon_thu' && (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6)) skipDay = true;
+            } else {
+              skipDay = true;
+            }
           }
-        }
-        
-        if (autoFillSchedule !== 'full_month_weekdays' && autoFillSchedule !== 'none') {
-          if (autoFillRange === '1-15' && day > 15) skipDay = true;
-          if (autoFillRange === '16-31' && day < 16) skipDay = true;
-        }
-
-        if (skipDay) continue;
-
-        // If we reach here, this day is a valid duty day for this schedule
-        dutyDaysCount++;
-        
-        // Stop if we hit max days based on schedule
-        if (autoFillSchedule === '8_day_mon_thu' && dutyDaysCount > 8) break;
-        if (autoFillSchedule === '9_day_mon_fri' && dutyDaysCount > 9) break;
-        if (autoFillSchedule === '10_day_mon_fri' && dutyDaysCount > 10) break;
-        if (autoFillSchedule === '11_day_all' && dutyDaysCount > 11) break;
-        if (autoFillSchedule === '12_day_all' && dutyDaysCount > 12) break;
-        if (autoFillSchedule === '13_day_all' && dutyDaysCount > 13) break;
-        if (autoFillSchedule === '14_day_all' && dutyDaysCount > 14) break;
-        if (autoFillSchedule === '15_day_all' && dutyDaysCount > 15) break;
-        
-        const dateStr = targetYear !== -1 && targetMonth !== -1 
-          ? `${targetYear}-${targetMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
-          : `YYYY-MM-${day.toString().padStart(2, '0')}`;
           
+          if (autoFillSchedule !== 'full_month_weekdays') {
+            if (autoFillRange === '1-15' && day > 15) skipDay = true;
+            if (autoFillRange === '16-31' && day < 16) skipDay = true;
+          }
+
+          if (skipDay) continue;
+
+          dutyDaysCount++;
+          if (autoFillSchedule === '8_day_mon_thu' && dutyDaysCount > 8) break;
+          if (autoFillSchedule === '9_day_mon_fri' && dutyDaysCount > 9) break;
+          if (autoFillSchedule === '10_day_mon_fri' && dutyDaysCount > 10) break;
+          if (autoFillSchedule === '11_day_all' && dutyDaysCount > 11) break;
+          if (autoFillSchedule === '12_day_all' && dutyDaysCount > 12) break;
+          if (autoFillSchedule === '13_day_all' && dutyDaysCount > 13) break;
+          if (autoFillSchedule === '14_day_all' && dutyDaysCount > 14) break;
+          if (autoFillSchedule === '15_day_all' && dutyDaysCount > 15) break;
+
+          const dateStr = targetYear !== -1 && targetMonth !== -1 
+            ? `${targetYear}-${targetMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+            : `YYYY-MM-${day.toString().padStart(2, '0')}`;
+            
+          targetDatesToKeep.add(dateStr);
+        }
+
+        newRecords = newRecords.filter(r => {
+          const dParts = r.date.split('-');
+          const d = parseInt(dParts[2], 10);
+          
+          let inTargetRange = false;
+          if (autoFillSchedule === 'full_month_weekdays') {
+             inTargetRange = true;
+          } else {
+             if (autoFillRange === '1-15' && d <= 15) inTargetRange = true;
+             if (autoFillRange === '16-31' && d >= 16) inTargetRange = true;
+          }
+
+          if (inTargetRange && !targetDatesToKeep.has(r.date)) {
+             return false;
+          }
+          return true;
+        });
+      }
+      
+      for (const dateStr of Array.from(targetDatesToKeep)) {
         const existingRecordIndex = newRecords.findIndex(r => r.date === dateStr);
         
-        const getRandomTime = (baseHr: number, minOffset: number, maxOffset: number) => {
+        const getRandomTime = (baseHr, minOffset, maxOffset) => {
           const offset = Math.floor(Math.random() * (maxOffset - minOffset + 1)) + minOffset;
           let h = baseHr;
           let m = offset;
-          if (m < 0) {
-            h -= 1;
-            m += 60;
-          } else if (m >= 60) {
-            h += 1;
-            m -= 60;
-          }
+          if (m < 0) { h -= 1; m += 60; } else if (m >= 60) { h += 1; m -= 60; }
           const ampm = h >= 12 ? 'PM' : 'AM';
           let h12 = h % 12;
           if (h12 === 0) h12 = 12;
           return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
         };
 
-        const timeIn = getRandomTime(8, -15, -1); // 07:45 AM - 07:59 AM
-        const amOutTime = autoFillType === 'straight' ? '' : getRandomTime(12, 1, 5); // 12:01 PM - 12:05 PM
-        const pmInTime = autoFillType === 'straight' ? '' : getRandomTime(13, -10, -1); // 12:50 PM - 12:59 PM
-        const pmOutTime = getRandomTime(17, 1, 10); // 05:01 PM - 05:10 PM
+        const timeIn = getRandomTime(8, -15, -1);
+        const amOutTime = getRandomTime(12, 1, 5);
+        const pmInTime = getRandomTime(13, -10, -1);
+        const pmOutTime = getRandomTime(17, 1, 10);
 
         if (existingRecordIndex !== -1) {
           const r = { ...newRecords[existingRecordIndex] };
@@ -375,12 +387,13 @@ export default function App() {
         }
       }
       
+      newRecords.sort((a, b) => a.date.localeCompare(b.date));
       newData[i] = { ...emp, records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut) };
     }
     
     setParsedData(newData);
     setAutoFillTrigger(prev => prev + 1);
-    setToast({ message: `Auto-filled ${filledCount} missing records across selected users.`, type: 'success' });
+    setToast({ message: `Auto-filled records & cleared extra days.`, type: 'success' });
   };
 
   const handleDownloadDTR = async (emp: EmployeeAttendance) => {
@@ -921,7 +934,13 @@ export default function App() {
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="printRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Range</label>
-                      <select id="printRange" value={printRange} onChange={(e) => setPrintRange(e.target.value as any)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                      <select id="printRange" value={printRange} onChange={(e) => {
+                        const val = e.target.value as any;
+                        setPrintRange(val);
+                        if (val === '1-15' || val === '16-31') {
+                          setAutoFillRange(val);
+                        }
+                      }} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
                         <option value="full">Whole Month</option>
                         <option value="1-15">Days 1-15</option>
                         <option value="16-31">Days 16-31</option>
