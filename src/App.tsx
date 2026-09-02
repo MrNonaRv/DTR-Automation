@@ -71,6 +71,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingBlank, setIsCreatingBlank] = useState(false);
   const [showBlankPrompt, setShowBlankPrompt] = useState(false);
+  const [blankCount, setBlankCount] = useState<number>(1);
   const [savedSessions, setSavedSessions] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -150,7 +151,7 @@ export default function App() {
     setIsDragging(false);
   };
 
-  const handleCreateBlank = async (useNoBiometric: boolean) => {
+  const handleCreateBlank = async (useNoBiometric: boolean, count: number = 1) => {
     setShowBlankPrompt(false);
     setIsCreatingBlank(true);
     try {
@@ -172,9 +173,15 @@ export default function App() {
         }
       }
       
-      if (newEmployees.length === 0) {
+      if (!useNoBiometric && count > 0) {
+        newEmployees = Array.from({ length: count }, (_, i) => ({
+          employeeIdOrName: '',
+          empNo: count > 1 ? i + 1 : undefined,
+          records: []
+        }));
+      } else if (newEmployees.length === 0) {
         newEmployees = [{
-          employeeIdOrName: 'New Employee',
+          employeeIdOrName: '',
           records: []
         }];
         if (useNoBiometric) {
@@ -183,45 +190,19 @@ export default function App() {
       }
       
       const parsedDataArray: any[] = [];
-      try {
-        let currentBatch = writeBatch(db);
-        let batchCount = 0;
-        
-        for (const emp of newEmployees) {
-          const newRef = doc(collection(db, 'dtr_records'));
-          currentBatch.set(newRef, {
-            employeeIdOrName: emp.employeeIdOrName,
-            records: [],
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            userId: 'anonymous'
-          });
-          parsedDataArray.push({ id: newRef.id, employeeIdOrName: emp.employeeIdOrName, empNo: emp.empNo, records: [] });
-          batchCount++;
-          
-          if (batchCount === 450) {
-            await currentBatch.commit();
-            currentBatch = writeBatch(db);
-            batchCount = 0;
-          }
-        }
-        
-        if (batchCount > 0) {
-          await currentBatch.commit();
-        }
-      } catch (e: any) {
-        
-        if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
-          setToast({ message: 'Firebase daily quota exceeded. Data loaded locally instead.', type: 'error' });
-        } else {
-          setToast({ message: 'Cloud sync failed. Data loaded locally.', type: 'error' });
-        }
-        if (parsedDataArray.length === 0) {
-           newEmployees.forEach(emp => {
-             parsedDataArray.push({ id: Math.random().toString(), employeeIdOrName: emp.employeeIdOrName, empNo: emp.empNo, records: [] });
-           });
-        }
-      }
+      
+      // We now generate the blank users instantly in local memory.
+      // This prevents UI freezing and bypasses immediate cloud database write limits.
+      newEmployees.forEach(emp => {
+        // Generate a random ID mimicking a firestore document ID
+        const fakeId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        parsedDataArray.push({ 
+          id: fakeId, 
+          employeeIdOrName: emp.employeeIdOrName, 
+          empNo: emp.empNo, 
+          records: [] 
+        });
+      });
       
       setParsedData(parsedDataArray);
       setCurrentIndex(0);
@@ -379,7 +360,8 @@ export default function App() {
             if (date.getMonth() === targetMonth - 1) {
               const dayOfWeek = date.getDay();
               if (autoFillSchedule === 'full_month_weekdays' && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
-              if ((autoFillSchedule === '9_day_mon_fri' || autoFillSchedule === '10_day_mon_fri') && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+              if ((autoFillSchedule === '9_day_mon_fri' || autoFillSchedule === '10_day_mon_fri' || autoFillSchedule === '11_day_all') && (dayOfWeek === 0 || dayOfWeek === 6)) skipDay = true;
+              if ((autoFillSchedule === '12_day_all' || autoFillSchedule === '13_day_all') && (dayOfWeek === 0)) skipDay = true;
               if (autoFillSchedule === '8_day_mon_thu' && (dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6)) skipDay = true;
             } else {
               skipDay = true;
@@ -949,7 +931,7 @@ export default function App() {
                       onClick={async () => {
                         const newRef = doc(collection(db, 'dtr_records'));
                         try {
-                          await setDoc(newRef, { employeeIdOrName: 'New Employee', records: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), userId: 'anonymous' });
+                          await setDoc(newRef, { employeeIdOrName: '', records: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), userId: 'anonymous' });
                         } catch (e: any) {
                           
                           if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
@@ -958,7 +940,7 @@ export default function App() {
                             setToast({ message: 'Failed to sync to cloud. User added locally.', type: 'warn' });
                           }
                         }
-                        const newEmp = { id: newRef.id, employeeIdOrName: 'New Employee', records: [] };
+                        const newEmp = { id: newRef.id, employeeIdOrName: '', records: [] };
                         setParsedData(prev => prev ? [...prev, newEmp] : [newEmp]);
                         setCurrentIndex(parsedData ? parsedData.length : 0);
                       }} 
@@ -1061,9 +1043,9 @@ export default function App() {
                         <option value="8_day_mon_thu">8 Days (Mon-Thu)</option>
                         <option value="9_day_mon_fri">9 Days (Mon-Fri)</option>
                         <option value="10_day_mon_fri">10 Days (Mon-Fri)</option>
-                        <option value="11_day_all">11 Days (Any Day)</option>
-                        <option value="12_day_all">12 Days (Any Day)</option>
-                        <option value="13_day_all">13 Days (Any Day)</option>
+                        <option value="11_day_all">11 Days (Mon-Fri)</option>
+                        <option value="12_day_all">12 Days (Mon-Sat)</option>
+                        <option value="13_day_all">13 Days (Mon-Sat)</option>
                         <option value="14_day_all">14 Days (Any Day)</option>
                         <option value="15_day_all">15 Days (Mon-Sun)</option>
                       </select>
@@ -1169,20 +1151,41 @@ export default function App() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm px-4">
           <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Create Blank DTR</h3>
-            <p className="text-gray-500 mb-6 text-sm">Would you like to start with a single empty form, or pre-load the No-Biometric list?</p>
+            <p className="text-gray-500 mb-4 text-sm">Choose how many blank users to generate or use your No-Biometric list.</p>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Number of Blank Users</label>
+              <input 
+                type="number" 
+                min="1" 
+                max="500" 
+                value={blankCount} 
+                onChange={(e) => setBlankCount(parseInt(e.target.value) || 1)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
             <div className="space-y-3">
               <button 
-                onClick={() => handleCreateBlank(true)}
+                onClick={() => handleCreateBlank(false, blankCount)}
                 className="w-full inline-flex justify-center items-center px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm"
+              >
+                Create {blankCount} Blank DTR{blankCount !== 1 ? 's' : ''}
+              </button>
+              
+              <div className="relative py-2 flex items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="flex-shrink-0 mx-4 text-gray-400 text-sm font-medium">OR</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              <button 
+                onClick={() => handleCreateBlank(true)}
+                className="w-full inline-flex justify-center items-center px-4 py-3 border border-gray-300 bg-white text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
               >
                 Use No-Biometric Form
               </button>
-              <button 
-                onClick={() => handleCreateBlank(false)}
-                className="w-full inline-flex justify-center items-center px-4 py-3 border border-gray-300 bg-white text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-colors"
-              >
-                Single Blank DTR
-              </button>
+
               <button 
                 onClick={() => setShowBlankPrompt(false)}
                 className="w-full inline-flex justify-center items-center px-4 py-2 mt-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors text-sm"
