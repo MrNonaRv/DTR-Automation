@@ -71,7 +71,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
               people: Array.isArray(parsed.people) ? parsed.people : []
             };
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error("Failed to load scanner config", e);
         }
       }
@@ -85,7 +85,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
             setRecentFiles(parsedRecent.files);
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed to load recent files config", e);
       }
     };
@@ -104,9 +104,13 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       const dataToSave = customData ? customData[key] : dataRef.current[key];
       await setDoc(doc(db, 'scanner_configs', key), dataToSave);
       setSaveStatus(prev => ({ ...prev, [key]: 'saved' }));
-    } catch (e) {
-      console.error('Storage error:', e);
-      setToast({ message: 'Failed to sync to cloud', type: 'error' });
+    } catch (e: any) {
+      
+      if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
+        setToast({ message: 'Firebase daily quota exceeded. Data saved locally.', type: 'error' });
+      } else {
+        setToast({ message: 'Failed to sync to cloud', type: 'error' });
+      }
       setSaveStatus(prev => ({ ...prev, [key]: 'unsaved' }));
     }
   };
@@ -458,7 +462,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         setRecentFiles(prev => {
           const next = [newFile, ...prev].slice(0, 10); // Keep last 10
           setDoc(doc(db, 'scanner_configs', 'recent_files_v1'), { files: next.map(f => ({ ...f, content: '' })) }).catch(err => {
-            console.error('Failed to save recent files to firestore', err);
+            
           });
           return next;
         });
