@@ -10,12 +10,6 @@ import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
 
-const toTitleCase = (str: string) => {
-  if (!str) return str;
-  return str.replace(/\w\S*/g, (txt) => {
-    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-  });
-};
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => localStorage.getItem('dtr_sessionId'));
@@ -79,6 +73,12 @@ export default function App() {
       sessionStorage.removeItem('dtr_route');
     }
   }, [showScannerTool, showEditor, showUploadUI]);
+  useEffect(() => {
+    if (showEditor && !parsedData) {
+      setShowEditor(false);
+    }
+  }, [showEditor, parsedData]);
+
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingBlank, setIsCreatingBlank] = useState(false);
   const [showBlankPrompt, setShowBlankPrompt] = useState(false);
@@ -175,7 +175,7 @@ export default function App() {
             if (Array.isArray(parsed.people) && parsed.people.length > 0) {
               newEmployees = parsed.people.map((p: any, idx: number) => { 
                 const assignedNo = p.empNo || (176 + idx); 
-                return { employeeIdOrName: p.name ? p.name.trim() : `User ${assignedNo}`, empNo: assignedNo, records: [] }; 
+                return { employeeIdOrName: p.name ? p.name.trim().toUpperCase() : `USER ${assignedNo}`, empNo: assignedNo, records: [] }; 
               });
             }
           }
@@ -288,7 +288,7 @@ export default function App() {
       const formattedData = result.data.map((emp: EmployeeAttendance) => ({
         ...emp,
         id: Math.random().toString(36).substring(2, 9),
-        employeeIdOrName: toTitleCase(emp.employeeIdOrName)
+        employeeIdOrName: (emp.employeeIdOrName || "").toUpperCase()
       }));
       
       setParsedData(formattedData);
@@ -1007,7 +1007,7 @@ export default function App() {
                         <Download className="h-5 w-5 mr-2" />
                         Generate PDFs
                       </button>
-                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
+                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
                         <Trash2 className="h-5 w-5" />
                       </button>
                     </div>

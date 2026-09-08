@@ -13,12 +13,6 @@ interface DTREditorProps {
 }
 
 
-const toTitleCase = (str: string) => {
-  if (!str) return str;
-  return str.replace(/\w\S*/g, (txt) => {
-    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-  });
-};
 export const DTREditor = memo(function DTREditor({ index, employee, period, printRange = 'full', onUpdate, onDownload, autoFillTrigger = 0 }: DTREditorProps) {
   const [editedName, setEditedName] = useState(employee.employeeIdOrName);
   const [editedRecords, setEditedRecords] = useState<AttendanceRecord[]>(employee.records);
@@ -217,7 +211,7 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newName = toTitleCase(e.target.value);
+    const newName = e.target.value.toUpperCase();
     setEditedName(newName);
     setIsSaved(false);
     

@@ -189,7 +189,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         const noVal = getCellStr(row.getCell(1)).trim();
         // Skip header
         if (rowNumber === 1 && noVal.toLowerCase() === 'no.') return;
-        const name = getCellStr(row.getCell(2)).trim();
+        const name = getCellStr(row.getCell(2)).trim().toUpperCase();
         const dept = getCellStr(row.getCell(3)).trim();
         newPeople.push({ id: Math.random().toString(36).slice(2, 10), empNo: noVal || String(rowNumber - 1), name: name, dept: dept });
       });
@@ -551,7 +551,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                         type="text"
                         placeholder="Full name"
                         value={p.name}
-                        onChange={e => updatePerson(key, idx, 'name', e.target.value)}
+                        onChange={e => updatePerson(key, idx, 'name', e.target.value.toUpperCase())}
                         className="w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1.5 text-sm outline-none transition-colors"
                       />
                     </td>
