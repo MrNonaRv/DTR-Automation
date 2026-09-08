@@ -4,6 +4,7 @@ import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -62,12 +63,22 @@ export default function App() {
   const [showAutoFill, setShowAutoFill] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showScannerTool, setShowScannerTool] = useState(false);
-  const [showUploadUI, setShowUploadUI] = useState(false);
+  const [showScannerTool, setShowScannerTool] = useState(() => sessionStorage.getItem('dtr_route') === 'scanner');
+  const [showUploadUI, setShowUploadUI] = useState(() => sessionStorage.getItem('dtr_route') === 'upload');
   const [showHelp, setShowHelp] = useState(false);
-  const [showEditor, setShowEditor] = useState(() => {
-    return !!localStorage.getItem('dtr_parsedData');
-  });
+  const [showEditor, setShowEditor] = useState(() => sessionStorage.getItem('dtr_route') === 'editor');
+  
+  useEffect(() => {
+    if (showScannerTool) {
+      sessionStorage.setItem('dtr_route', 'scanner');
+    } else if (showEditor) {
+      sessionStorage.setItem('dtr_route', 'editor');
+    } else if (showUploadUI) {
+      sessionStorage.setItem('dtr_route', 'upload');
+    } else {
+      sessionStorage.removeItem('dtr_route');
+    }
+  }, [showScannerTool, showEditor, showUploadUI]);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingBlank, setIsCreatingBlank] = useState(false);
   const [showBlankPrompt, setShowBlankPrompt] = useState(false);
@@ -650,6 +661,7 @@ export default function App() {
                 {isUpdating ? 'Updating...' : 'Install Update'}
               </button>
             )}
+            <PWAInstallButton />
             <button onClick={() => checkUpdate(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200" title="Check for updates and sync">
               <RefreshCw className="w-4 h-4 mr-2" /> Check Updates
             </button>
