@@ -10,15 +10,27 @@ import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
 
+
+const safeStorage = {
+  getItem: (key) => {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  },
+  setItem: (key, value) => {
+    try { localStorage.setItem(key, value); } catch(e) {}
+  },
+  removeItem: (key) => {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+};
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => localStorage.getItem('dtr_sessionId'));
-  const [currentSessionName, setCurrentSessionName] = useState<string>(() => localStorage.getItem('dtr_sessionName') || '');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => safeStorage.getItem('dtr_sessionId'));
+  const [currentSessionName, setCurrentSessionName] = useState<string>(() => safeStorage.getItem('dtr_sessionName') || '');
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(() => {
     try {
-      const saved = localStorage.getItem('dtr_parsedData');
+      const saved = safeStorage.getItem('dtr_parsedData');
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error('Failed to load parsedData from localStorage', e);
@@ -29,7 +41,7 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [period, setPeriod] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem('dtr_period');
+      const saved = safeStorage.getItem('dtr_period');
       if (saved) return saved;
     } catch(e) {}
     const now = new Date();
@@ -57,22 +69,12 @@ export default function App() {
   const [showAutoFill, setShowAutoFill] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showScannerTool, setShowScannerTool] = useState(() => sessionStorage.getItem('dtr_route') === 'scanner');
-  const [showUploadUI, setShowUploadUI] = useState(() => sessionStorage.getItem('dtr_route') === 'upload');
+  const [showScannerTool, setShowScannerTool] = useState(false);
+  const [showUploadUI, setShowUploadUI] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [showEditor, setShowEditor] = useState(() => sessionStorage.getItem('dtr_route') === 'editor');
+  const [showEditor, setShowEditor] = useState(false);
   
-  useEffect(() => {
-    if (showScannerTool) {
-      sessionStorage.setItem('dtr_route', 'scanner');
-    } else if (showEditor) {
-      sessionStorage.setItem('dtr_route', 'editor');
-    } else if (showUploadUI) {
-      sessionStorage.setItem('dtr_route', 'upload');
-    } else {
-      sessionStorage.removeItem('dtr_route');
-    }
-  }, [showScannerTool, showEditor, showUploadUI]);
+
   useEffect(() => {
     if (showEditor && !parsedData) {
       setShowEditor(false);
@@ -88,14 +90,47 @@ export default function App() {
   
   useEffect(() => {
     if (parsedData) {
-      localStorage.setItem('dtr_parsedData', JSON.stringify(parsedData));
+      safeStorage.setItem('dtr_parsedData', JSON.stringify(parsedData));
     } else {
-      localStorage.removeItem('dtr_parsedData');
+      safeStorage.removeItem('dtr_parsedData');
     }
   }, [parsedData]);
+
+  useEffect(() => {
+    if (currentSessionId) safeStorage.setItem('dtr_sessionId', currentSessionId);
+    else safeStorage.removeItem('dtr_sessionId');
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (currentSessionName) safeStorage.setItem('dtr_sessionName', currentSessionName);
+    else safeStorage.removeItem('dtr_sessionName');
+  }, [currentSessionName]);
+
+  // Real-time auto-sync to Firebase
+  useEffect(() => {
+    if (!parsedData || !currentSessionId) return;
+    setAutoSaveStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        const sessionRef = doc(db, 'dtr_sessions', currentSessionId);
+        await setDoc(sessionRef, {
+          name: currentSessionName || 'Untitled Session',
+          period: period,
+          data: parsedData,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        setAutoSaveStatus('saved');
+        loadSavedSessions();
+      } catch (e) {
+        console.error("Failed to sync to cloud:", e);
+        setAutoSaveStatus('idle');
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [parsedData, period, currentSessionName, currentSessionId]);
   
   useEffect(() => {
-    if (period) localStorage.setItem('dtr_period', period);
+    if (period) safeStorage.setItem('dtr_period', period);
   }, [period]);
 
   const loadSavedSessions = async () => {
@@ -218,6 +253,9 @@ export default function App() {
       setParsedData(parsedDataArray);
       setCurrentIndex(0);
       setShowEditor(true);
+      const newId = doc(collection(db, 'dtr_sessions')).id;
+      setCurrentSessionId(newId);
+      setCurrentSessionName('Blank Session ' + new Date().toLocaleDateString());
     } catch(err) {
       console.error(err);
     } finally {
@@ -292,7 +330,9 @@ export default function App() {
       }));
       
       setParsedData(formattedData);
-      
+      const newId = doc(collection(db, 'dtr_sessions')).id;
+      setCurrentSessionId(newId);
+      setCurrentSessionName(file.name.replace(/\.[^/.]+$/, ""));
       setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
       setShowEditor(true);
@@ -750,6 +790,8 @@ export default function App() {
                             if (confirm("Load this session? Any unsaved changes in your current view will be lost.")) {
                               setParsedData(session.data);
                               if (session.period) setPeriod(session.period);
+                              setCurrentSessionId(session.id);
+                              setCurrentSessionName(session.name);
                               setShowEditor(true);
                             }
                           }}
@@ -1007,7 +1049,7 @@ export default function App() {
                         <Download className="h-5 w-5 mr-2" />
                         Generate PDFs
                       </button>
-                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
+                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); setCurrentSessionId(null); setCurrentSessionName(""); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
                         <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
@@ -1145,7 +1187,7 @@ export default function App() {
 
 
             <div className="grid grid-cols-1 gap-6">
-              {parsedData.length > 0 && (
+              {parsedData.length > 0 && parsedData[currentIndex] && (
                 <DTREditor
                   key={`${currentIndex}-${autoFillTrigger}`}
                   index={currentIndex}
