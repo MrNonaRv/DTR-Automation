@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, X, ChevronLeft, CheckCircle2, Trash2, Plus, History, Clock } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
+import { SearchableSelect } from './components/SearchableSelect';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -1320,21 +1321,17 @@ export default function App() {
               </button>
               
               <div className="flex-1 flex justify-center px-4 w-full gap-2 items-center">
-                <select
+                <SearchableSelect
                   value={currentIndex}
-                  onChange={(e) => {
-                    const idx = Number(e.target.value);
+                  onChange={(idx) => {
                     setCurrentIndex(idx);
                     setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
                   }}
-                  className="block w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
-                >
-                  {parsedData.map((emp, idx) => (
-                    <option key={idx} value={idx}>
-                      {emp.empNo !== undefined ? emp.empNo : idx + 1}. {emp.employeeIdOrName}
-                    </option>
-                  ))}
-                </select>
+                  options={parsedData.map((emp, idx) => ({
+                    value: idx,
+                    label: `${emp.empNo !== undefined ? emp.empNo : idx + 1}. ${emp.employeeIdOrName}`
+                  }))}
+                />
                 
                 {parsedData[currentIndex] && (
                   <button
