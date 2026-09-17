@@ -5,6 +5,15 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { registerSW } from 'virtual:pwa-register';
 
+// Suppress expected Vite websocket errors in this environment
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  if (typeof args[0] === 'string' && args[0].includes('[vite]')) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
+
 // Catch beforeinstallprompt early
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

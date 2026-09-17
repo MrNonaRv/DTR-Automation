@@ -122,15 +122,26 @@ export default function App() {
 
 
 
+  const currentSessionIdRef = React.useRef(currentSessionId);
+  const currentIndexRef = React.useRef(currentIndex);
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+  
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
   // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndex) {
+        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndexRef.current) {
           setCurrentIndex(data.activeEmployeeIndex);
         }
-        if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
+        if (data.activeSessionId && data.activeSessionId !== currentSessionIdRef.current) {
           console.log("Auto-syncing to globally active session:", data.activeSessionId);
           setCurrentSessionId(data.activeSessionId);
           
@@ -139,7 +150,7 @@ export default function App() {
             if (sessionSnap.exists()) {
               const sessionData = sessionSnap.data();
               setCurrentSessionName(sessionData.name);
-              let serverDataArray = [];
+              let serverDataArray: any[] = [];
               if (sessionData.dataMap) {
                 Object.keys(sessionData.dataMap).forEach(k => serverDataArray[Number(k)] = sessionData.dataMap[k]);
               } else if (sessionData.data) {
@@ -155,7 +166,7 @@ export default function App() {
       }
     });
     return () => unsub();
-  }, [currentSessionId]);
+  }, []);
 
 
 
@@ -656,6 +667,12 @@ export default function App() {
         console.error(e);
         setToast({ message: "Failed to sync to cloud. The data might be too large.", type: "error" });
       });
+      
+      // Force sync pointer for other devices
+      setDoc(doc(db, 'settings', 'sync'), { 
+        activeSessionId: currentSessionId,
+        timestamp: serverTimestamp()
+      }, { merge: true }).catch(console.error);
     }
     
     setAutoFillTrigger(prev => prev + 1);
@@ -830,6 +847,13 @@ export default function App() {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
       }).catch((e: any) => console.error(e));
+      
+      // Force sync pointer for other devices
+      setDoc(doc(db, 'settings', 'sync'), { 
+        activeSessionId: currentSessionId,
+        activeEmployeeIndex: idx,
+        timestamp: serverTimestamp()
+      }, { merge: true }).catch(console.error);
     }
   }, [currentSessionId]);
 
