@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
+import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, X, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import HelpGuide from './components/HelpGuide';
@@ -18,8 +18,24 @@ const toTitleCase = (str: string) => {
 };
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => { try { return localStorage.getItem('dtr_sessionId'); } catch(e) { return null; } });
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => { 
+    try { 
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlSession = urlParams.get('session');
+      if (urlSession) {
+        localStorage.setItem('dtr_sessionId', urlSession);
+        return urlSession;
+      }
+      return localStorage.getItem('dtr_sessionId'); 
+    } catch(e) { return null; } 
+  });
   const [currentSessionName, setCurrentSessionName] = useState<string>(() => { try { return localStorage.getItem('dtr_sessionName') || ''; } catch(e) { return ''; } });
+    useEffect(() => {
+    if (window.location.search.includes('session=')) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(() => {
@@ -133,6 +149,41 @@ export default function App() {
   }, [parsedData, currentSessionName, period]);
 
 
+
+  // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
+          console.log("Auto-syncing to globally active session:", data.activeSessionId);
+          setCurrentSessionId(data.activeSessionId);
+          
+          // Fetch the data for this session so we can load it instantly
+          getDoc(doc(db, 'dtr_sessions', data.activeSessionId)).then(sessionSnap => {
+            if (sessionSnap.exists()) {
+              const sessionData = sessionSnap.data();
+              setCurrentSessionName(sessionData.name);
+              setParsedData(sessionData.data);
+              if (sessionData.period) setPeriod(sessionData.period);
+              setShowEditor(true);
+              setToast({ message: "Auto-synced with your other device!", type: "info" });
+            }
+          });
+        }
+      }
+    });
+    return () => unsub();
+  }, [currentSessionId]);
+
+  // Update global sync pointer when we manually switch sessions
+  useEffect(() => {
+    if (currentSessionId) {
+      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: currentSessionId }, { merge: true }).catch(e => console.error("Failed to update global sync pointer", e));
+    }
+  }, [currentSessionId]);
+
+
   // REAL-TIME CLOUD SYNC
   useEffect(() => {
     if (!currentSessionId) return;
@@ -179,7 +230,7 @@ export default function App() {
 
   const loadSavedSessions = async () => {
     try {
-      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(5));
+      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
       const snap = await getDocs(q);
       const sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setSavedSessions(sessions);
@@ -844,7 +895,7 @@ export default function App() {
                   <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                     <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Recent Saved DTRs</h4>
                     <div className="space-y-2">
-                      {savedSessions.map(session => (
+                      {savedSessions.slice(0, 1).map(session => (
                         <button
                           key={session.id}
                           onClick={() => {
@@ -875,6 +926,14 @@ export default function App() {
                           </div>
                         </button>
                       ))}
+                      {savedSessions.length > 1 && (
+                        <button
+                          onClick={() => setShowAllSessionsModal(true)}
+                          className="w-full py-2.5 mt-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          View all {savedSessions.length} saved sessions
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1051,6 +1110,7 @@ export default function App() {
                       <Save className="w-4 h-4 mr-1.5 text-green-600" />
                       {autoSaveStatus === 'saving' ? "Saving to Cloud..." : autoSaveStatus === 'saved' ? `Cloud Saved: ${currentSessionName}` : "Rename File"}
                     </button>
+
                     <button 
                       onClick={async () => {
                         const newRef = doc(collection(db, 'dtr_records'));
