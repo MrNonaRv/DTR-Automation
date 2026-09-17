@@ -1,7 +1,11 @@
 const fs = require('fs');
 let code = fs.readFileSync('vite.config.ts', 'utf-8');
-code = code.replace(
-  "hmr: process.env.DISABLE_HMR !== 'true',",
-  "hmr: process.env.DISABLE_HMR !== 'true' ? { overlay: false } : false,"
-);
+
+const target = `VitePWA({
+        registerType: 'autoUpdate',`;
+const replace = `VitePWA({
+        selfDestroying: true,
+        registerType: 'autoUpdate',`;
+
+code = code.replace(target, replace);
 fs.writeFileSync('vite.config.ts', code);

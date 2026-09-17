@@ -127,19 +127,12 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.activeIndex !== undefined) {
-          setCurrentIndex(prev => {
-            if (prev !== data.activeIndex) {
-              console.log("Auto-syncing to globally active index:", data.activeIndex);
-              return data.activeIndex;
+        if (data.activeEmployeeIndex !== undefined) {
+          setCurrentIndex(prevIndex => {
+            if (data.activeEmployeeIndex !== prevIndex) {
+              return data.activeEmployeeIndex;
             }
-            return prev;
-          });
-        }
-        if (data.isEditorOpen !== undefined) {
-          setShowEditor(prev => {
-            if (!prev && data.isEditorOpen) return true;
-            return prev;
+            return prevIndex;
           });
         }
         if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
@@ -160,7 +153,6 @@ export default function App() {
               setParsedData(serverDataArray);
               if (sessionData.period) setPeriod(sessionData.period);
               setShowEditor(true);
-              setDoc(doc(db, 'settings', 'sync'), { isEditorOpen: true }, { merge: true }).catch(e => {});
               setToast({ message: "Auto-synced with your other device!", type: "info" });
             }
           });
@@ -196,6 +188,7 @@ export default function App() {
           const prevDataString = JSON.stringify(prevData);
           
           if (newDataString !== prevDataString) {
+            console.log("App: Cloud update received! Data differs. len1=", newDataString.length, " len2=", prevDataString.length);
             return serverDataArray;
           }
           return prevData;
@@ -242,7 +235,7 @@ export default function App() {
       setTimeout(() => setAutoSaveStatus('idle'), 500);
       
       // Explicitly update global pointer so other devices follow AFTER doc is created
-      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId, activeIndex: 0 }, { merge: true }).catch(console.error);
+      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
       loadSavedSessions();
     } catch(e: any) {
       console.error(e);
@@ -378,7 +371,6 @@ export default function App() {
       
       createNewSession(parsedDataArray);
       setCurrentIndex(0);
-    setDoc(doc(db, 'settings', 'sync'), { activeIndex: 0 }, { merge: true }).catch(e => {});
       setShowEditor(true);
     } catch(err) {
       console.error(err);
@@ -401,7 +393,6 @@ export default function App() {
     setParsedData(null);
     setError(null);
     setCurrentIndex(0);
-    setDoc(doc(db, 'settings', 'sync'), { activeIndex: 0 }, { merge: true }).catch(e => {});
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -479,7 +470,6 @@ export default function App() {
       
       setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
-    setDoc(doc(db, 'settings', 'sync'), { activeIndex: 0 }, { merge: true }).catch(e => {});
       setShowEditor(true);
     } catch (err: any) {
       setError(err.message || 'An error occurred during upload.');
@@ -971,6 +961,7 @@ export default function App() {
                               setParsedData(session.data);
                               if (session.period) setPeriod(session.period);
                               setShowEditor(true);
+                              setDoc(doc(db, 'settings', 'sync'), { activeSessionId: session.id }, { merge: true }).catch(console.error);
                             }
                           }}
                           className="w-full text-left px-4 py-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all flex items-center justify-between group"
@@ -1186,7 +1177,6 @@ export default function App() {
                         const newIndex = parsedData ? parsedData.length : 0;
                         setParsedData(prev => prev ? [...prev, newEmp] : [newEmp]);
                         setCurrentIndex(newIndex);
-    setDoc(doc(db, 'settings', 'sync'), { activeIndex: newIndex }, { merge: true }).catch(e => {});
                         
                         if (currentSessionId) {
                           updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
@@ -1322,9 +1312,11 @@ export default function App() {
             <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 space-y-4 sm:space-y-0">
               <button
                 onClick={() => {
-                  const newVal = Math.max(0, currentIndex - 1);
-                  setCurrentIndex(newVal);
-                  setDoc(doc(db, 'settings', 'sync'), { activeIndex: newVal }, { merge: true }).catch(e => {});
+                  setCurrentIndex(prev => {
+                    const idx = Math.max(0, prev - 1);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                    return idx;
+                  });
                 }}
                 disabled={currentIndex === 0}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
@@ -1337,10 +1329,10 @@ export default function App() {
                 <select
                   value={currentIndex}
                   onChange={(e) => {
-                  const newVal = Number(e.target.value);
-                  setCurrentIndex(newVal);
-                  setDoc(doc(db, 'settings', 'sync'), { activeIndex: newVal }, { merge: true }).catch(e => {});
-                }}
+                    const idx = Number(e.target.value);
+                    setCurrentIndex(idx);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                  }}
                   className="block w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
                 >
                   {parsedData.map((emp, idx) => (
@@ -1379,9 +1371,7 @@ export default function App() {
                         if (isLast) {
                           setShowEditor(false);
                         } else {
-                          const newVal = Math.max(0, currentIndex - 1);
-                          setCurrentIndex(newVal);
-                          setDoc(doc(db, 'settings', 'sync'), { activeIndex: newVal }, { merge: true }).catch(e => {});
+                          setCurrentIndex(prev => Math.max(0, prev - 1));
                         }
                         setToast({ message: 'User deleted successfully', type: 'success' });
                       }
@@ -1396,9 +1386,11 @@ export default function App() {
 
               <button
                 onClick={() => {
-                  const newVal = Math.min(parsedData.length - 1, currentIndex + 1);
-                  setCurrentIndex(newVal);
-                  setDoc(doc(db, 'settings', 'sync'), { activeIndex: newVal }, { merge: true }).catch(e => {});
+                  setCurrentIndex(prev => {
+                    const idx = Math.min(parsedData.length - 1, prev + 1);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                    return idx;
+                  });
                 }}
                 disabled={currentIndex === parsedData.length - 1}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"

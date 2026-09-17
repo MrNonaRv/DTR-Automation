@@ -7,11 +7,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(() => {
   return {
     plugins: [
-      react({
-        fastRefresh: process.env.DISABLE_HMR !== 'true',
-      }), 
+      react(), 
       tailwindcss(),
       VitePWA({
+        selfDestroying: true,
         registerType: 'autoUpdate',
         includeAssets: ['Systemlogo.jpg'],
         manifest: {
@@ -54,8 +53,8 @@ export default defineConfig(() => {
       chunkSizeWarningLimit: 1200
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true' ? { overlay: false } : false,
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      hmr: false,
+      watch: null,
     },
   };
 });
