@@ -117,23 +117,7 @@ export default function App() {
   }, [currentSessionName]);
 
   
-  // AUTO-SAVE PERIOD & NAME
-  useEffect(() => {
-    if (!currentSessionId) return;
-    
-    const timer = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
-          name: currentSessionName || `DTR Session - ${new Date().toLocaleDateString()}`,
-          period: period,
-          updatedAt: serverTimestamp()
-        });
-      } catch (e) {
-        // Doc might not exist yet if just created
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [currentSessionName, period, currentSessionId]);
+
 
 
 
@@ -143,6 +127,9 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndex) {
+          setCurrentIndex(data.activeEmployeeIndex);
+        }
         if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
           console.log("Auto-syncing to globally active session:", data.activeSessionId);
           setCurrentSessionId(data.activeSessionId);
@@ -196,6 +183,7 @@ export default function App() {
           const prevDataString = JSON.stringify(prevData);
           
           if (newDataString !== prevDataString) {
+            console.log("App: Cloud update received! Data differs.");
             return serverDataArray;
           }
           return prevData;
@@ -979,7 +967,7 @@ export default function App() {
                             <div className="text-xs text-gray-500 mt-1 flex flex-col gap-0.5">
                               <span>{session.data?.length || 0} records • {session.period || "No Period"}</span>
                               <span className="text-[10px] text-gray-400">
-                                Last opened: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
+                                Last updated: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
                               </span>
                             </div>
                           </div>
@@ -1165,6 +1153,9 @@ export default function App() {
                         const newName = prompt("Rename your saved file:", currentSessionName);
                         if (newName) {
                           setCurrentSessionName(newName);
+                          if (currentSessionId) {
+                            updateDoc(doc(db, 'dtr_sessions', currentSessionId), { name: newName, updatedAt: serverTimestamp() }).catch(console.error);
+                          }
                           setToast({ message: "File renamed! Auto-saving...", type: "success" });
                         }
                       }}
@@ -1205,7 +1196,13 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                     <div className="space-y-1.5">
                       <label htmlFor="period" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Period</label>
-                      <input type="month" id="period" value={period} onChange={(e) => setPeriod(e.target.value)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white" />
+                      <input type="month" id="period" value={period} onChange={(e) => {
+                        const val = e.target.value;
+                        setPeriod(val);
+                        if (currentSessionId) {
+                          updateDoc(doc(db, 'dtr_sessions', currentSessionId), { period: val, updatedAt: serverTimestamp() }).catch(console.error);
+                        }
+                      }} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white" />
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="printRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Range</label>
@@ -1308,7 +1305,13 @@ export default function App() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 space-y-4 sm:space-y-0">
               <button
-                onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                onClick={() => {
+                  setCurrentIndex(prev => {
+                    const idx = Math.max(0, prev - 1);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                    return idx;
+                  });
+                }}
                 disabled={currentIndex === 0}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               >
@@ -1319,7 +1322,11 @@ export default function App() {
               <div className="flex-1 flex justify-center px-4 w-full gap-2 items-center">
                 <select
                   value={currentIndex}
-                  onChange={(e) => setCurrentIndex(Number(e.target.value))}
+                  onChange={(e) => {
+                    const idx = Number(e.target.value);
+                    setCurrentIndex(idx);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                  }}
                   className="block w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
                 >
                   {parsedData.map((emp, idx) => (
@@ -1372,7 +1379,13 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => setCurrentIndex(prev => Math.min(parsedData.length - 1, prev + 1))}
+                onClick={() => {
+                  setCurrentIndex(prev => {
+                    const idx = Math.min(parsedData.length - 1, prev + 1);
+                    setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
+                    return idx;
+                  });
+                }}
                 disabled={currentIndex === parsedData.length - 1}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
               >
@@ -1452,7 +1465,7 @@ export default function App() {
                         <span className="font-medium text-gray-700">{session.data?.length || 0} employees • {session.period || "No Period"}</span>
                         <span className="text-xs text-gray-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          Last opened: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
+                          Last updated: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
                         </span>
                       </div>
                     </div>
