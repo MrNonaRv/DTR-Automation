@@ -13,6 +13,12 @@ interface DTREditorProps {
 }
 
 
+const toTitleCase = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\w\S*/g, (txt) => {
+    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+  });
+};
 export const DTREditor = memo(function DTREditor({ index, employee, period, printRange = 'full', onUpdate, onDownload, autoFillTrigger = 0 }: DTREditorProps) {
   const [editedName, setEditedName] = useState(employee.employeeIdOrName);
   const [editedRecords, setEditedRecords] = useState<AttendanceRecord[]>(employee.records);
@@ -96,7 +102,10 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
       } else {
         newRecords.push({
           date: dateStr,
-          amIn: 'No Biometric'
+          amIn: 'No Biometric',
+          amOut: null,
+          pmIn: null,
+          pmOut: null
         });
       }
     });
@@ -188,7 +197,7 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
     if (existingRecord) {
       newRecords = editedRecords.map(r => r === existingRecord ? { ...r, [field]: value } : r);
     } else {
-      newRecords = [...editedRecords, { date: dateStr, [field]: value }];
+      newRecords = [...editedRecords, { date: dateStr, amIn: null, amOut: null, pmIn: null, pmOut: null, [field]: value }];
     }
     setEditedRecords(newRecords);
     setIsSaved(false);
@@ -211,7 +220,7 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newName = e.target.value.toUpperCase();
+    const newName = toTitleCase(e.target.value);
     setEditedName(newName);
     setIsSaved(false);
     

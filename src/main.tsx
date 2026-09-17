@@ -5,29 +5,35 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { registerSW } from 'virtual:pwa-register';
 
+// Catch beforeinstallprompt early
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   (window as any).deferredPWAEvent = e;
 });
 
-try {
-  registerSW({
-    onNeedRefresh() {},
-    onOfflineReady() {}
+const updateSW = registerSW({
+  onNeedRefresh() {
+    updateSW(true);
+  },
+  onOfflineReady() {
+    console.log('offline ready');
+  }
+});
+
+
+// Force unregister all old service workers to fix cache issues
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for(let registration of registrations) {
+      registration.unregister();
+    }
   });
-} catch(e) {
-  console.error('SW Error:', e);
 }
 
-try {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </StrictMode>
-  );
-} catch(e) {
-  console.error("Render Error:", e);
-  document.body.innerHTML += '<div style="background:red;color:white;padding:20px;">Render Error: ' + e.message + '</div>';
-}
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </StrictMode>
+);

@@ -49,14 +49,7 @@ export default defineConfig(() => {
       },
     },
     build: {
-      chunkSizeWarningLimit: 1200,
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'lucide-react', 'exceljs'],
-          },
-        },
-      },
+      chunkSizeWarningLimit: 1200
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',

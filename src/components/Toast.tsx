@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, XCircle, Info, X, AlertTriangle } from 'lucide-react';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'warn';
 
 interface ToastProps {
   message: string;
@@ -21,13 +21,15 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   const icons = {
     success: <CheckCircle2 className="w-5 h-5 text-green-500" />,
     error: <XCircle className="w-5 h-5 text-red-500" />,
-    info: <Info className="w-5 h-5 text-blue-500" />
+    info: <Info className="w-5 h-5 text-blue-500" />,
+    warn: <AlertTriangle className="w-5 h-5 text-amber-500" />
   };
 
   const bgColors = {
     success: 'bg-white border-green-200',
     error: 'bg-white border-red-200',
-    info: 'bg-white border-blue-200'
+    info: 'bg-white border-blue-200',
+    warn: 'bg-white border-amber-200'
   };
 
   return (

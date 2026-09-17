@@ -4,33 +4,27 @@ import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
-import { PWAInstallButton } from './components/PWAInstallButton';
+
 import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
 
-
-const safeStorage = {
-  getItem: (key) => {
-    try { return localStorage.getItem(key); } catch(e) { return null; }
-  },
-  setItem: (key, value) => {
-    try { localStorage.setItem(key, value); } catch(e) {}
-  },
-  removeItem: (key) => {
-    try { localStorage.removeItem(key); } catch(e) {}
-  }
+const toTitleCase = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\w\S*/g, (txt) => {
+    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+  });
 };
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => safeStorage.getItem('dtr_sessionId'));
-  const [currentSessionName, setCurrentSessionName] = useState<string>(() => safeStorage.getItem('dtr_sessionName') || '');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => { try { return localStorage.getItem('dtr_sessionId'); } catch(e) { return null; } });
+  const [currentSessionName, setCurrentSessionName] = useState<string>(() => { try { return localStorage.getItem('dtr_sessionName') || ''; } catch(e) { return ''; } });
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isUploading, setIsUploading] = useState(false);
   const [parsedData, setParsedData] = useState<EmployeeAttendance[] | null>(() => {
     try {
-      const saved = safeStorage.getItem('dtr_parsedData');
+      let saved = null; try { saved = localStorage.getItem('dtr_parsedData'); } catch(e) {}
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error('Failed to load parsedData from localStorage', e);
@@ -41,7 +35,7 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [period, setPeriod] = useState<string>(() => {
     try {
-      const saved = safeStorage.getItem('dtr_period');
+      let saved = null; try { saved = localStorage.getItem('dtr_period'); } catch(e) {}
       if (saved) return saved;
     } catch(e) {}
     const now = new Date();
@@ -64,17 +58,27 @@ export default function App() {
   const [autoFillUsers, setAutoFillUsers] = useState<string>('');
   const [autoFillType, setAutoFillType] = useState<'straight' | 'normal'>('normal');
   const [autoFillRange, setAutoFillRange] = useState<'1-15' | '16-31'>('1-15');
-  const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '9_day_mon_fri' | '10_day_mon_fri' | '11_day_all' | '12_day_all' | '13_day_all' | '14_day_all' | '15_day_all'>('full_month_weekdays');
+  const [autoFillSchedule, setAutoFillSchedule] = useState<'full_month_weekdays' | '8_day_mon_thu' | '9_day_mon_fri' | '10_day_mon_fri' | '11_day_all' | '12_day_all' | '13_day_all' | '14_day_all' | '15_day_all' | 'none'>('full_month_weekdays');
   const [autoFillTrigger, setAutoFillTrigger] = useState(0);
   const [showAutoFill, setShowAutoFill] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [showScannerTool, setShowScannerTool] = useState(false);
-  const [showUploadUI, setShowUploadUI] = useState(false);
+  const [showScannerTool, setShowScannerTool] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'scanner'; } catch(e) { return false; } });
+  const [showUploadUI, setShowUploadUI] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'upload'; } catch(e) { return false; } });
   const [showHelp, setShowHelp] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
+  const [showEditor, setShowEditor] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'editor'; } catch(e) { return false; } });
   
-
+  useEffect(() => {
+    if (showScannerTool) {
+      try { sessionStorage.setItem('dtr_route', 'scanner'); } catch(e) {}
+    } else if (showEditor) {
+      try { sessionStorage.setItem('dtr_route', 'editor'); } catch(e) {}
+    } else if (showUploadUI) {
+      try { sessionStorage.setItem('dtr_route', 'upload'); } catch(e) {}
+    } else {
+      try { sessionStorage.removeItem('dtr_route'); } catch(e) {}
+    }
+  }, [showScannerTool, showEditor, showUploadUI]);
   useEffect(() => {
     if (showEditor && !parsedData) {
       setShowEditor(false);
@@ -88,49 +92,56 @@ export default function App() {
   const [savedSessions, setSavedSessions] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
-  useEffect(() => {
-    if (parsedData) {
-      safeStorage.setItem('dtr_parsedData', JSON.stringify(parsedData));
-    } else {
-      safeStorage.removeItem('dtr_parsedData');
-    }
-  }, [parsedData]);
 
   useEffect(() => {
-    if (currentSessionId) safeStorage.setItem('dtr_sessionId', currentSessionId);
-    else safeStorage.removeItem('dtr_sessionId');
+    if (currentSessionId) { try { localStorage.setItem('dtr_sessionId', currentSessionId); } catch(e) {} }
   }, [currentSessionId]);
 
   useEffect(() => {
-    if (currentSessionName) safeStorage.setItem('dtr_sessionName', currentSessionName);
-    else safeStorage.removeItem('dtr_sessionName');
+    if (currentSessionName) { try { localStorage.setItem('dtr_sessionName', currentSessionName); } catch(e) {} }
   }, [currentSessionName]);
 
-  // Real-time auto-sync to Firebase
+  // AUTO-SAVE TO CLOUD
   useEffect(() => {
-    if (!parsedData || !currentSessionId) return;
-    setAutoSaveStatus('saving');
+    if (!parsedData || parsedData.length === 0) return;
+    
     const timer = setTimeout(async () => {
+      setAutoSaveStatus('saving');
       try {
-        const sessionRef = doc(db, 'dtr_sessions', currentSessionId);
-        await setDoc(sessionRef, {
-          name: currentSessionName || 'Untitled Session',
+        const sessionId = currentSessionId || Math.random().toString(36).substring(2, 12);
+        if (!currentSessionId) setCurrentSessionId(sessionId);
+        
+        const sessionName = currentSessionName || `DTR Session - ${new Date().toLocaleDateString()}`;
+        if (!currentSessionName) setCurrentSessionName(sessionName);
+
+        await setDoc(doc(db, 'dtr_sessions', sessionId), {
+          name: sessionName,
           period: period,
           data: parsedData,
           updatedAt: serverTimestamp()
-        }, { merge: true });
+        });
+        
         setAutoSaveStatus('saved');
         loadSavedSessions();
       } catch (e) {
-        console.error("Failed to sync to cloud:", e);
+        console.error("Auto-save failed:", e);
         setAutoSaveStatus('idle');
       }
-    }, 2000);
+    }, 2500);
+
     return () => clearTimeout(timer);
-  }, [parsedData, period, currentSessionName, currentSessionId]);
+  }, [parsedData, currentSessionName, period]);
+
+  useEffect(() => {
+    if (parsedData) {
+      try { localStorage.setItem('dtr_parsedData', JSON.stringify(parsedData)); } catch(e) {}
+    } else {
+      try { localStorage.removeItem('dtr_parsedData'); } catch(e) {}
+    }
+  }, [parsedData]);
   
   useEffect(() => {
-    if (period) safeStorage.setItem('dtr_period', period);
+    if (period) { try { localStorage.setItem('dtr_period', period); } catch(e) {} }
   }, [period]);
 
   const loadSavedSessions = async () => {
@@ -148,7 +159,7 @@ export default function App() {
     loadSavedSessions();
   }, []);
 
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warn' } | null>(null);
 
   const checkUpdate = async (manual = false) => {
     try {
@@ -210,7 +221,7 @@ export default function App() {
             if (Array.isArray(parsed.people) && parsed.people.length > 0) {
               newEmployees = parsed.people.map((p: any, idx: number) => { 
                 const assignedNo = p.empNo || (176 + idx); 
-                return { employeeIdOrName: p.name ? p.name.trim().toUpperCase() : `USER ${assignedNo}`, empNo: assignedNo, records: [] }; 
+                return { employeeIdOrName: p.name ? p.name.trim() : `User ${assignedNo}`, empNo: assignedNo, records: [] }; 
               });
             }
           }
@@ -253,9 +264,6 @@ export default function App() {
       setParsedData(parsedDataArray);
       setCurrentIndex(0);
       setShowEditor(true);
-      const newId = doc(collection(db, 'dtr_sessions')).id;
-      setCurrentSessionId(newId);
-      setCurrentSessionName('Blank Session ' + new Date().toLocaleDateString());
     } catch(err) {
       console.error(err);
     } finally {
@@ -326,13 +334,33 @@ export default function App() {
       const formattedData = result.data.map((emp: EmployeeAttendance) => ({
         ...emp,
         id: Math.random().toString(36).substring(2, 9),
-        employeeIdOrName: (emp.employeeIdOrName || "").toUpperCase()
+        employeeIdOrName: toTitleCase(emp.employeeIdOrName)
       }));
       
+      
+      // Auto-detect period from uploaded data
+      if (formattedData && formattedData.length > 0) {
+        for (const emp of formattedData) {
+          if (emp.records && emp.records.length > 0) {
+            const firstDateStr = emp.records[0].date;
+            if (firstDateStr) {
+              const parts = firstDateStr.split('-');
+              if (parts.length >= 2) {
+                const year = parts[0];
+                const month = parts[1].padStart(2, '0');
+                const detectedPeriod = `${year}-${month}`;
+                setPeriod(detectedPeriod);
+                break; // Found a valid date, break out
+              }
+            }
+          }
+        }
+      }
+      
+      setCurrentSessionId(null);
+      setCurrentSessionName(`DTR Session - ${new Date().toLocaleDateString()}`);
       setParsedData(formattedData);
-      const newId = doc(collection(db, 'dtr_sessions')).id;
-      setCurrentSessionId(newId);
-      setCurrentSessionName(file.name.replace(/\.[^/.]+$/, ""));
+      
       setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
       setShowEditor(true);
@@ -465,7 +493,7 @@ export default function App() {
       for (const dateStr of Array.from(targetDatesToKeep)) {
         const existingRecordIndex = newRecords.findIndex(r => r.date === dateStr);
         
-        const getRandomTime = (baseHr, minOffset, maxOffset) => {
+        const getRandomTime = (baseHr: number, minOffset: number, maxOffset: number) => {
           const offset = Math.floor(Math.random() * (maxOffset - minOffset + 1)) + minOffset;
           let h = baseHr;
           let m = offset;
@@ -701,7 +729,7 @@ export default function App() {
                 {isUpdating ? 'Updating...' : 'Install Update'}
               </button>
             )}
-            <PWAInstallButton />
+
             <button onClick={() => checkUpdate(true)} className="flex items-center text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-blue-200" title="Check for updates and sync">
               <RefreshCw className="w-4 h-4 mr-2" /> Check Updates
             </button>
@@ -788,10 +816,10 @@ export default function App() {
                           key={session.id}
                           onClick={() => {
                             if (confirm("Load this session? Any unsaved changes in your current view will be lost.")) {
-                              setParsedData(session.data);
-                              if (session.period) setPeriod(session.period);
                               setCurrentSessionId(session.id);
                               setCurrentSessionName(session.name);
+                              setParsedData(session.data);
+                              if (session.period) setPeriod(session.period);
                               setShowEditor(true);
                             }
                           }}
@@ -1049,7 +1077,7 @@ export default function App() {
                         <Download className="h-5 w-5 mr-2" />
                         Generate PDFs
                       </button>
-                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); setCurrentSessionId(null); setCurrentSessionName(""); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
+                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
                         <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
@@ -1187,7 +1215,7 @@ export default function App() {
 
 
             <div className="grid grid-cols-1 gap-6">
-              {parsedData.length > 0 && parsedData[currentIndex] && (
+              {parsedData.length > 0 && (
                 <DTREditor
                   key={`${currentIndex}-${autoFillTrigger}`}
                   index={currentIndex}

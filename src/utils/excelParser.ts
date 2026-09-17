@@ -12,6 +12,7 @@ export interface AttendanceRecord {
 export interface EmployeeAttendance {
   id?: string;
   employeeIdOrName: string;
+  empNo?: number;
   records: AttendanceRecord[];
   createdAt?: any;
 }

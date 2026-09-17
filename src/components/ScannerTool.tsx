@@ -108,7 +108,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
       
       if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
         setToast({ message: 'Firebase daily quota exceeded. Data saved locally.', type: 'error' });
-      } else {
+      } else if (uploadedFile) {
         setToast({ message: 'Failed to sync to cloud', type: 'error' });
       }
       setSaveStatus(prev => ({ ...prev, [key]: 'unsaved' }));
@@ -189,7 +189,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         const noVal = getCellStr(row.getCell(1)).trim();
         // Skip header
         if (rowNumber === 1 && noVal.toLowerCase() === 'no.') return;
-        const name = getCellStr(row.getCell(2)).trim().toUpperCase();
+        const name = getCellStr(row.getCell(2)).trim();
         const dept = getCellStr(row.getCell(3)).trim();
         newPeople.push({ id: Math.random().toString(36).slice(2, 10), empNo: noVal || String(rowNumber - 1), name: name, dept: dept });
       });
@@ -420,7 +420,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     };
 
     try {
-      let spec;
+      let spec: any[] = [];
       
       if (!uploadedFile && selectedScanner === 'no_biometric') {
         const people = data['no_biometric'].people;
@@ -428,14 +428,14 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
         
         // Generate empty records for each person (pre-fill column A with their ID so they can easily type times)
         spec = people.map(p => {
-          const userId = parseInt(p.empNo, 10);
+          const userId = parseInt(p.empNo || "", 10);
           return {
             sheetName: p.name.trim() || `User ${p.empNo}`,
             records: Array(10).fill(null).map(() => ({ userId, dt: '' }))
           };
         });
         appendLog(`Generated blank workbook with ${spec.length} sheets from No Biometric roster.`, 'ok');
-      } else {
+      } else if (uploadedFile) {
         const lower = uploadedFile.name.toLowerCase();
       
       if (lower.endsWith('.dat')) {
@@ -467,7 +467,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
           return next;
         });
 
-      } else {
+      } else if (uploadedFile) {
         throw new Error('Unsupported file type.');
       }
       } // close else block
@@ -551,7 +551,7 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
                         type="text"
                         placeholder="Full name"
                         value={p.name}
-                        onChange={e => updatePerson(key, idx, 'name', e.target.value.toUpperCase())}
+                        onChange={e => updatePerson(key, idx, 'name', e.target.value)}
                         className="w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white rounded px-2 py-1.5 text-sm outline-none transition-colors"
                       />
                     </td>
