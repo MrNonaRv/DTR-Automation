@@ -2,7 +2,6 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, X, ChevronLeft, CheckCircle2, Trash2, Plus, History, Clock } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
-import { SearchableSelect } from './components/SearchableSelect';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -128,7 +127,7 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.activeEmployeeIndex !== undefined) {
+        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndex) {
           setCurrentIndex(data.activeEmployeeIndex);
         }
         if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
@@ -215,19 +214,9 @@ export default function App() {
     setCurrentSessionName(sessionName);
     setParsedData(newDataArray);
     
-    // Map to object (with null-stripping optimization to drastically reduce payload size)
+    // Map to object
     const dataMap: any = {};
-    newDataArray.forEach((emp, i) => {
-      const optimizedRecords = emp.records ? emp.records.map((r: any) => {
-        const o: any = { date: r.date };
-        if (r.amIn) o.amIn = r.amIn;
-        if (r.amOut) o.amOut = r.amOut;
-        if (r.pmIn) o.pmIn = r.pmIn;
-        if (r.pmOut) o.pmOut = r.pmOut;
-        return o;
-      }) : [];
-      dataMap[i] = { ...emp, records: optimizedRecords };
-    });
+    newDataArray.forEach((emp, i) => dataMap[i] = emp);
     
     setAutoSaveStatus('saving');
     try {
@@ -655,17 +644,7 @@ export default function App() {
     if (currentSessionId) {
       setAutoSaveStatus('saving');
       const dataMap: any = {};
-      newData.forEach((emp, i) => {
-        const optimizedRecords = emp.records ? emp.records.map((r: any) => {
-          const o: any = { date: r.date };
-          if (r.amIn) o.amIn = r.amIn;
-          if (r.amOut) o.amOut = r.amOut;
-          if (r.pmIn) o.pmIn = r.pmIn;
-          if (r.pmOut) o.pmOut = r.pmOut;
-          return o;
-        }) : [];
-        dataMap[i] = { ...emp, records: optimizedRecords };
-      });
+      newData.forEach((emp, i) => dataMap[i] = emp);
       
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
         dataMap: dataMap,
@@ -1341,17 +1320,21 @@ export default function App() {
               </button>
               
               <div className="flex-1 flex justify-center px-4 w-full gap-2 items-center">
-                <SearchableSelect
+                <select
                   value={currentIndex}
-                  onChange={(idx) => {
+                  onChange={(e) => {
+                    const idx = Number(e.target.value);
                     setCurrentIndex(idx);
                     setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
                   }}
-                  options={parsedData.map((emp, idx) => ({
-                    value: idx,
-                    label: `${emp.empNo !== undefined ? emp.empNo : idx + 1}. ${emp.employeeIdOrName}`
-                  }))}
-                />
+                  className="block w-full max-w-xs pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
+                >
+                  {parsedData.map((emp, idx) => (
+                    <option key={idx} value={idx}>
+                      {emp.empNo !== undefined ? emp.empNo : idx + 1}. {emp.employeeIdOrName}
+                    </option>
+                  ))}
+                </select>
                 
                 {parsedData[currentIndex] && (
                   <button
@@ -1370,17 +1353,7 @@ export default function App() {
                         // SYNC DELETION (Full array rewrite needed because indices shift)
                         if (currentSessionId && !isLast) {
                            const dataMap: any = {};
-                           nextArray.forEach((emp, i) => {
-                             const optimizedRecords = emp.records ? emp.records.map((r: any) => {
-                               const o: any = { date: r.date };
-                               if (r.amIn) o.amIn = r.amIn;
-                               if (r.amOut) o.amOut = r.amOut;
-                               if (r.pmIn) o.pmIn = r.pmIn;
-                               if (r.pmOut) o.pmOut = r.pmOut;
-                               return o;
-                             }) : [];
-                             dataMap[i] = { ...emp, records: optimizedRecords };
-                           });
+                           nextArray.forEach((e, i) => dataMap[i] = e);
                            updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
                              dataMap: dataMap,
                              updatedAt: serverTimestamp()
