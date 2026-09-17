@@ -25,11 +25,10 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   const [isSaved, setIsSaved] = useState(true);
 
   useEffect(() => {
-    if (autoFillTrigger > 0) {
-      setEditedName(employee.employeeIdOrName);
-      setEditedRecords(employee.records);
-    }
-  }, [autoFillTrigger, employee]);
+    // Sync local state when employee prop changes from outside (e.g., auto-fill or cloud sync)
+    setEditedName(employee.employeeIdOrName);
+    setEditedRecords(employee.records);
+  }, [employee, autoFillTrigger]);
 
   // Generate 31 days
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
