@@ -244,9 +244,10 @@ export default function App() {
       // Explicitly update global pointer so other devices follow AFTER doc is created
       setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
       loadSavedSessions();
-    } catch(e) {
+    } catch(e: any) {
       console.error(e);
       setAutoSaveStatus('idle');
+      setToast({ message: "Failed to save session to cloud. File may be too large.", type: "error" });
     }
   };
 
@@ -663,7 +664,10 @@ export default function App() {
       }).then(() => {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
-      }).catch((e: any) => console.error(e));
+      }).catch((e: any) => {
+        console.error(e);
+        setToast({ message: "Failed to sync to cloud. The data might be too large.", type: "error" });
+      });
     }
     
     setAutoFillTrigger(prev => prev + 1);
