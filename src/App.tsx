@@ -219,15 +219,12 @@ export default function App() {
   
 
 
-    const createNewSession = async (newDataArray: any[]) => {
+    const createNewSession = async (newDataArray: any[], overridePeriod?: string) => {
     const sessionId = Math.random().toString(36).substring(2, 12);
     const sessionName = `DTR Session - ${new Date().toLocaleDateString()}`;
     setCurrentSessionId(sessionId);
     setCurrentSessionName(sessionName);
     setParsedData(newDataArray);
-    
-    // Explicitly update global pointer so other devices follow
-    setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
     
     // Map to object
     const dataMap: any = {};
@@ -237,12 +234,15 @@ export default function App() {
     try {
       await setDoc(doc(db, 'dtr_sessions', sessionId), {
         name: sessionName,
-        period: period || '',
+        period: overridePeriod || period || '',
         dataMap: dataMap,
         updatedAt: serverTimestamp()
       });
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus('idle'), 500);
+      
+      // Explicitly update global pointer so other devices follow AFTER doc is created
+      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
       loadSavedSessions();
     } catch(e) {
       console.error(e);
@@ -453,6 +453,7 @@ export default function App() {
       
       
       // Auto-detect period from uploaded data
+      let finalPeriod = period;
       if (formattedData && formattedData.length > 0) {
         for (const emp of formattedData) {
           if (emp.records && emp.records.length > 0) {
@@ -462,8 +463,8 @@ export default function App() {
               if (parts.length >= 2) {
                 const year = parts[0];
                 const month = parts[1].padStart(2, '0');
-                const detectedPeriod = `${year}-${month}`;
-                setPeriod(detectedPeriod);
+                finalPeriod = `${year}-${month}`;
+                setPeriod(finalPeriod);
                 break; // Found a valid date, break out
               }
             }
@@ -471,7 +472,7 @@ export default function App() {
         }
       }
       
-      createNewSession(formattedData);
+      createNewSession(formattedData, finalPeriod);
       
       setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
