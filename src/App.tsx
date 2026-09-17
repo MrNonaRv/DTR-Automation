@@ -128,7 +128,7 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndex) {
+        if (data.activeEmployeeIndex !== undefined) {
           setCurrentIndex(data.activeEmployeeIndex);
         }
         if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
@@ -215,9 +215,19 @@ export default function App() {
     setCurrentSessionName(sessionName);
     setParsedData(newDataArray);
     
-    // Map to object
+    // Map to object (with null-stripping optimization to drastically reduce payload size)
     const dataMap: any = {};
-    newDataArray.forEach((emp, i) => dataMap[i] = emp);
+    newDataArray.forEach((emp, i) => {
+      const optimizedRecords = emp.records ? emp.records.map((r: any) => {
+        const o: any = { date: r.date };
+        if (r.amIn) o.amIn = r.amIn;
+        if (r.amOut) o.amOut = r.amOut;
+        if (r.pmIn) o.pmIn = r.pmIn;
+        if (r.pmOut) o.pmOut = r.pmOut;
+        return o;
+      }) : [];
+      dataMap[i] = { ...emp, records: optimizedRecords };
+    });
     
     setAutoSaveStatus('saving');
     try {
@@ -645,7 +655,17 @@ export default function App() {
     if (currentSessionId) {
       setAutoSaveStatus('saving');
       const dataMap: any = {};
-      newData.forEach((emp, i) => dataMap[i] = emp);
+      newData.forEach((emp, i) => {
+        const optimizedRecords = emp.records ? emp.records.map((r: any) => {
+          const o: any = { date: r.date };
+          if (r.amIn) o.amIn = r.amIn;
+          if (r.amOut) o.amOut = r.amOut;
+          if (r.pmIn) o.pmIn = r.pmIn;
+          if (r.pmOut) o.pmOut = r.pmOut;
+          return o;
+        }) : [];
+        dataMap[i] = { ...emp, records: optimizedRecords };
+      });
       
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
         dataMap: dataMap,
@@ -1350,7 +1370,17 @@ export default function App() {
                         // SYNC DELETION (Full array rewrite needed because indices shift)
                         if (currentSessionId && !isLast) {
                            const dataMap: any = {};
-                           nextArray.forEach((e, i) => dataMap[i] = e);
+                           nextArray.forEach((emp, i) => {
+                             const optimizedRecords = emp.records ? emp.records.map((r: any) => {
+                               const o: any = { date: r.date };
+                               if (r.amIn) o.amIn = r.amIn;
+                               if (r.amOut) o.amOut = r.amOut;
+                               if (r.pmIn) o.pmIn = r.pmIn;
+                               if (r.pmOut) o.pmOut = r.pmOut;
+                               return o;
+                             }) : [];
+                             dataMap[i] = { ...emp, records: optimizedRecords };
+                           });
                            updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
                              dataMap: dataMap,
                              updatedAt: serverTimestamp()

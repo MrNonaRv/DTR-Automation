@@ -1,26 +1,25 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
-const replacement = `    setParsedData(newData);
-    
-    // INSTANT CLOUD SYNC FOR AUTO-FILL
-    if (currentSessionId) {
+const target = `    if (currentSessionId) {
       setAutoSaveStatus('saving');
       const dataMap: any = {};
-      newData.forEach((emp, i) => dataMap[i] = emp);
-      
-      updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
-        dataMap: dataMap,
-        updatedAt: serverTimestamp()
-      }).then(() => {
-        setAutoSaveStatus('saved');
-        setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      }).catch(e => console.error(e));
-    }
-    
-    setAutoFillTrigger(prev => prev + 1);`;
+      newData.forEach((emp, i) => dataMap[i] = emp);`;
 
-code = code.replace("setParsedData(newData);\n    setAutoFillTrigger(prev => prev + 1);", replacement);
+const replace = `    if (currentSessionId) {
+      setAutoSaveStatus('saving');
+      const dataMap: any = {};
+      newData.forEach((emp, i) => {
+        const optimizedRecords = emp.records ? emp.records.map((r: any) => {
+          const o: any = { date: r.date };
+          if (r.amIn) o.amIn = r.amIn;
+          if (r.amOut) o.amOut = r.amOut;
+          if (r.pmIn) o.pmIn = r.pmIn;
+          if (r.pmOut) o.pmOut = r.pmOut;
+          return o;
+        }) : [];
+        dataMap[i] = { ...emp, records: optimizedRecords };
+      });`;
 
+code = code.replace(target, replace);
 fs.writeFileSync('src/App.tsx', code);
-console.log('App.tsx patched for autofill sync');
