@@ -26,9 +26,12 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
 
   useEffect(() => {
     // Sync local state when employee prop changes from outside (e.g., auto-fill or cloud sync)
-    setEditedName(employee.employeeIdOrName);
-    setEditedRecords(employee.records);
-  }, [employee, autoFillTrigger]);
+    // ONLY overwrite if the user isn't actively typing/unsaved
+    if (isSaved) {
+      setEditedName(employee.employeeIdOrName);
+      setEditedRecords(employee.records);
+    }
+  }, [employee, autoFillTrigger, isSaved]);
 
   // Generate 31 days
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -181,7 +184,7 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
           records: debouncedSave.records
         });
         setIsSaved(true);
-      }, 1000);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [debouncedSave, index, employee, onUpdate]);

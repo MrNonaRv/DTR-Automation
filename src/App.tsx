@@ -5,7 +5,7 @@ import { DTREditor } from './components/DTREditor';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
 
-import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
 const ScannerTool = React.lazy(() => import('./components/ScannerTool').then(module => ({ default: module.ScannerTool })));
@@ -80,6 +80,7 @@ export default function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [showScannerTool, setShowScannerTool] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'scanner'; } catch(e) { return false; } });
+  const [showAllSessionsModal, setShowAllSessionsModal] = useState(false);
   const [showUploadUI, setShowUploadUI] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'upload'; } catch(e) { return false; } });
   const [showHelp, setShowHelp] = useState(false);
   const [showEditor, setShowEditor] = useState(() => { try { return sessionStorage.getItem('dtr_route') === 'editor'; } catch(e) { return false; } });
@@ -117,36 +118,25 @@ export default function App() {
     if (currentSessionName) { try { localStorage.setItem('dtr_sessionName', currentSessionName); } catch(e) {} }
   }, [currentSessionName]);
 
-  // AUTO-SAVE TO CLOUD
+  
+  // AUTO-SAVE PERIOD & NAME
   useEffect(() => {
-    if (!parsedData || parsedData.length === 0) return;
+    if (!currentSessionId) return;
     
     const timer = setTimeout(async () => {
-      setAutoSaveStatus('saving');
       try {
-        const sessionId = currentSessionId || Math.random().toString(36).substring(2, 12);
-        if (!currentSessionId) setCurrentSessionId(sessionId);
-        
-        const sessionName = currentSessionName || `DTR Session - ${new Date().toLocaleDateString()}`;
-        if (!currentSessionName) setCurrentSessionName(sessionName);
-
-        await setDoc(doc(db, 'dtr_sessions', sessionId), {
-          name: sessionName,
+        await updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+          name: currentSessionName || `DTR Session - ${new Date().toLocaleDateString()}`,
           period: period,
-          data: parsedData,
           updatedAt: serverTimestamp()
         });
-        
-        setAutoSaveStatus('saved');
-        loadSavedSessions();
       } catch (e) {
-        console.error("Auto-save failed:", e);
-        setAutoSaveStatus('idle');
+        // Doc might not exist yet if just created
       }
-    }, 2500);
-
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [parsedData, currentSessionName, period]);
+  }, [currentSessionName, period, currentSessionId]);
+
 
 
 
@@ -164,7 +154,13 @@ export default function App() {
             if (sessionSnap.exists()) {
               const sessionData = sessionSnap.data();
               setCurrentSessionName(sessionData.name);
-              setParsedData(sessionData.data);
+              let serverDataArray = [];
+              if (sessionData.dataMap) {
+                Object.keys(sessionData.dataMap).forEach(k => serverDataArray[Number(k)] = sessionData.dataMap[k]);
+              } else if (sessionData.data) {
+                serverDataArray = sessionData.data;
+              }
+              setParsedData(serverDataArray);
               if (sessionData.period) setPeriod(sessionData.period);
               setShowEditor(true);
               setToast({ message: "Auto-synced with your other device!", type: "info" });
@@ -179,7 +175,7 @@ export default function App() {
   // Update global sync pointer when we manually switch sessions
   useEffect(() => {
     if (currentSessionId) {
-      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: currentSessionId }, { merge: true }).catch(e => console.error("Failed to update global sync pointer", e));
+      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: currentSessionId }, { merge: true }).catch((e: any) => console.error("Failed to update global sync pointer", e));
     }
   }, [currentSessionId]);
 
@@ -190,20 +186,24 @@ export default function App() {
 
     const unsub = onSnapshot(doc(db, 'dtr_sessions', currentSessionId), (docSnap) => {
       if (docSnap.exists()) {
-        // Ignore local writes that haven't been committed yet to avoid jitter/feedback loops
-        if (docSnap.metadata.hasPendingWrites) return;
-
         const data = docSnap.data();
         
+        // Convert dataMap back to array
+        let serverDataArray = [];
+        if (data.dataMap) {
+          Object.keys(data.dataMap).forEach(k => serverDataArray[Number(k)] = data.dataMap[k]);
+        } else if (data.data) {
+          serverDataArray = data.data; // Legacy fallback
+        }
+        
         setParsedData(prevData => {
-          if (!prevData) return data.data;
-          // Only update if the data actually changed from outside
-          const newDataString = JSON.stringify(data.data);
+          if (!prevData) return serverDataArray;
+          // Deep compare string to avoid jitter, but now it's much more stable
+          const newDataString = JSON.stringify(serverDataArray);
           const prevDataString = JSON.stringify(prevData);
           
           if (newDataString !== prevDataString) {
-            console.log('Syncing data from cloud...');
-            return data.data;
+            return serverDataArray;
           }
           return prevData;
         });
@@ -228,11 +228,48 @@ export default function App() {
     if (period) { try { localStorage.setItem('dtr_period', period); } catch(e) {} }
   }, [period]);
 
+    const createNewSession = async (newDataArray: any[]) => {
+    const sessionId = Math.random().toString(36).substring(2, 12);
+    const sessionName = `DTR Session - ${new Date().toLocaleDateString()}`;
+    setCurrentSessionId(sessionId);
+    setCurrentSessionName(sessionName);
+    setParsedData(newDataArray);
+    
+    // Map to object
+    const dataMap: any = {};
+    newDataArray.forEach((emp, i) => dataMap[i] = emp);
+    
+    setAutoSaveStatus('saving');
+    try {
+      await setDoc(doc(db, 'dtr_sessions', sessionId), {
+        name: sessionName,
+        period: period || '',
+        dataMap: dataMap,
+        updatedAt: serverTimestamp()
+      });
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 500);
+      loadSavedSessions();
+    } catch(e) {
+      console.error(e);
+      setAutoSaveStatus('idle');
+    }
+  };
+
   const loadSavedSessions = async () => {
     try {
       const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
       const snap = await getDocs(q);
-      const sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sessions = snap.docs.map(d => {
+        const docData = d.data();
+        let dataArray = [];
+        if (docData.dataMap) {
+          Object.keys(docData.dataMap).forEach(k => dataArray[Number(k)] = docData.dataMap[k]);
+        } else if (docData.data) {
+          dataArray = docData.data;
+        }
+        return { id: d.id, ...docData, data: dataArray };
+      });
       setSavedSessions(sessions);
     } catch (e) {
       console.error("Failed to load saved sessions", e);
@@ -345,7 +382,7 @@ export default function App() {
         });
       });
       
-      setParsedData(parsedDataArray);
+      createNewSession(parsedDataArray);
       setCurrentIndex(0);
       setShowEditor(true);
     } catch(err) {
@@ -441,9 +478,7 @@ export default function App() {
         }
       }
       
-      setCurrentSessionId(null);
-      setCurrentSessionName(`DTR Session - ${new Date().toLocaleDateString()}`);
-      setParsedData(formattedData);
+      createNewSession(formattedData);
       
       setToast({ message: 'DTR Data uploaded successfully.', type: 'success' });
       setCurrentIndex(0);
@@ -620,7 +655,23 @@ export default function App() {
       newData[i] = { ...emp, records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut) };
     }
     
-    setParsedData(newData);
+        setParsedData(newData);
+    
+    // INSTANT CLOUD SYNC FOR AUTO-FILL
+    if (currentSessionId) {
+      setAutoSaveStatus('saving');
+      const dataMap: any = {};
+      newData.forEach((emp, i) => dataMap[i] = emp);
+      
+      updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+        dataMap: dataMap,
+        updatedAt: serverTimestamp()
+      }).then(() => {
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 500);
+      }).catch((e: any) => console.error(e));
+    }
+    
     setAutoFillTrigger(prev => prev + 1);
     setToast({ message: `Auto-filled records & cleared extra days.`, type: 'success' });
   };
@@ -782,7 +833,19 @@ export default function App() {
       next[idx] = updatedEmp;
       return next;
     });
-  }, []);
+    
+    // INSTANT CLOUD SYNC FOR THIS SPECIFIC EMPLOYEE ONLY
+    if (currentSessionId) {
+      // Silently sync to avoid UI disruption
+      updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+        [`dataMap.${idx}`]: updatedEmp,
+        updatedAt: serverTimestamp()
+      }).then(() => {
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 500);
+      }).catch((e: any) => console.error(e));
+    }
+  }, [currentSessionId]);
 
   const handleDownloadEmployeeDTR = React.useCallback((emp: EmployeeAttendance) => {
     handleDownloadDTR(emp);
@@ -1113,20 +1176,17 @@ export default function App() {
 
                     <button 
                       onClick={async () => {
-                        const newRef = doc(collection(db, 'dtr_records'));
-                        try {
-                          await setDoc(newRef, { employeeIdOrName: '', records: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(), userId: 'anonymous' });
-                        } catch (e: any) {
-                          
-                          if (e?.code === 'resource-exhausted' || e?.message?.includes('Quota')) {
-                            setToast({ message: 'Firebase quota exceeded. User added locally only.', type: 'warn' });
-                          } else {
-                            setToast({ message: 'Failed to sync to cloud. User added locally.', type: 'warn' });
-                          }
-                        }
-                        const newEmp = { id: newRef.id, employeeIdOrName: '', records: [] };
+                        const newEmp = { employeeIdOrName: '', records: [] };
+                        const newIndex = parsedData ? parsedData.length : 0;
                         setParsedData(prev => prev ? [...prev, newEmp] : [newEmp]);
-                        setCurrentIndex(parsedData ? parsedData.length : 0);
+                        setCurrentIndex(newIndex);
+                        
+                        if (currentSessionId) {
+                          updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+                            [`dataMap.${newIndex}`]: newEmp,
+                            updatedAt: serverTimestamp()
+                          }).catch((e: any) => console.error(e));
+                        }
                       }} 
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                     >
@@ -1170,7 +1230,7 @@ export default function App() {
                         <Download className="h-5 w-5 mr-2" />
                         Generate PDFs
                       </button>
-                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
+                      <button onClick={async () => { if (confirm("Are you sure you want to clear all DTR records?")) { setParsedData(null); setFile(null); setShowEditor(false); setCurrentSessionId(null); } }} className="inline-flex items-center justify-center px-4 py-2.5 min-h-[46px] bg-red-50 text-red-600 hover:bg-red-100 font-bold rounded-xl transition-colors border border-red-200">
                         <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
@@ -1275,11 +1335,26 @@ export default function App() {
                       const emp = parsedData[currentIndex];
                       if (confirm(`Are you sure you want to delete ${emp.employeeIdOrName}?`)) {
                         const isLast = parsedData.length === 1;
+                        let nextArray: any[] = [];
                         setParsedData(prev => {
                           if (!prev) return null;
                           const next = prev.filter((_, i) => i !== currentIndex);
+                          nextArray = next;
                           return next.length > 0 ? next : null;
                         });
+                        
+                        // SYNC DELETION (Full array rewrite needed because indices shift)
+                        if (currentSessionId && !isLast) {
+                           const dataMap: any = {};
+                           nextArray.forEach((e, i) => dataMap[i] = e);
+                           updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+                             dataMap: dataMap,
+                             updatedAt: serverTimestamp()
+                           }).catch((e: any) => console.error(e));
+                        } else if (currentSessionId && isLast) {
+                           deleteDoc(doc(db, 'dtr_sessions', currentSessionId)).catch((e: any) => console.error(e));
+                        }
+                        
                         if (isLast) {
                           setShowEditor(false);
                         } else {
