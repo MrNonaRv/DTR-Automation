@@ -26,7 +26,6 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
 
   useEffect(() => {
     // Sync local state when employee prop changes from outside (e.g., auto-fill or cloud sync)
-    console.log("DTREditor: employee prop changed. isSaved:", isSaved);
     // ONLY overwrite if the user isn't actively typing/unsaved
     if (isSaved) {
       setEditedName(employee.employeeIdOrName);

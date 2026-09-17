@@ -1,46 +1,34 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
-// 1. Add global sync listener
-const autoSyncCode = `
-  // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
-          console.log("Auto-syncing to globally active session:", data.activeSessionId);
-          setCurrentSessionId(data.activeSessionId);
-          
-          // Fetch the data for this session so we can load it instantly
-          getDoc(doc(db, 'dtr_sessions', data.activeSessionId)).then(sessionSnap => {
-            if (sessionSnap.exists()) {
-              const sessionData = sessionSnap.data();
-              setCurrentSessionName(sessionData.name);
-              setParsedData(sessionData.data);
-              if (sessionData.period) setPeriod(sessionData.period);
-              setShowEditor(true);
-              setToast({ message: "Auto-synced with your other device!", type: "info" });
-            }
-          });
-        }
-      }
-    });
-    return () => unsub();
-  }, [currentSessionId]);
-
-  // Update global sync pointer when we manually switch sessions
-  useEffect(() => {
-    if (currentSessionId) {
-      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: currentSessionId }, { merge: true }).catch(e => console.error("Failed to update global sync pointer", e));
-    }
-  }, [currentSessionId]);
-`;
-
+// Update settings/sync listener to also pick up activeIndex
 code = code.replace(
-  "  // REAL-TIME CLOUD SYNC",
-  autoSyncCode + "\n\n  // REAL-TIME CLOUD SYNC"
+  /if \(data\.activeSessionId && data\.activeSessionId !== currentSessionId\) \{/,
+  `if (data.activeIndex !== undefined && data.activeIndex !== currentIndex) {
+          console.log("Auto-syncing to globally active index:", data.activeIndex);
+          setCurrentIndex(data.activeIndex);
+        }
+        if (data.activeSessionId && data.activeSessionId !== currentSessionId) {`
+);
+
+// Add activeIndex to the createNewSession block
+code = code.replace(
+  /setDoc\(doc\(db, 'settings', 'sync'\), \{ activeSessionId: sessionId \}, \{ merge: true \}\)\.catch\(console\.error\);/,
+  `setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId, activeIndex: 0 }, { merge: true }).catch(console.error);`
+);
+
+// Add activeIndex to the onClick for Next/Prev/Select user
+code = code.replace(
+  /setCurrentIndex\((.*?)\);/g,
+  (match, p1) => {
+    // Only wrap direct state setters that aren't inside the listener
+    return `setCurrentIndex(${p1});
+    try {
+      const newVal = typeof ${p1} === 'function' ? ${p1}(currentIndex) : ${p1};
+      setDoc(doc(db, 'settings', 'sync'), { activeIndex: newVal }, { merge: true }).catch(e => {});
+    } catch(err){}`;
+  }
 );
 
 fs.writeFileSync('src/App.tsx', code);
-console.log('App.tsx patched for magic global auto-sync');
+console.log("Patched App.tsx with global index sync.");
