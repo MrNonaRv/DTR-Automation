@@ -11,30 +11,8 @@
     <title>DTR Automate</title>
     <link rel="apple-touch-icon" href="/Systemlogo.jpg" />
     <link rel="icon" type="image/jpeg" href="/Systemlogo.jpg" />
-    <script>
-      // Emergency PWA Cache Clear
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(let registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-      
-      // If the app stays blank for 3 seconds, force clear cache and reload
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const root = document.getElementById('root');
-          if (root && root.innerHTML.trim() === '') {
-            caches.keys().then((names) => {
-              for (let name of names) caches.delete(name);
-            });
-            window.location.reload(true);
-          }
-        }, 3000);
-      });
-    </script>
-  <script src="/clear-sw.js"></script></head>
+    
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
