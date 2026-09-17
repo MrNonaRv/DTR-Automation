@@ -1,9 +1,11 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, X, ChevronLeft, CheckCircle2, Trash2, Plus } from 'lucide-react';
+import { UploadCloud, Printer, Save, HelpCircle, File, AlertCircle, Download, RefreshCw, Calendar, Users, Activity, ChevronRight, X, ChevronLeft, CheckCircle2, Trash2, Plus, History, Clock } from 'lucide-react';
 import { AttendanceRecord, EmployeeAttendance } from './utils/excelParser';
 import { DTREditor } from './components/DTREditor';
 import HelpGuide from './components/HelpGuide';
 import { Toast } from './components/Toast';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, deleteDoc, getDoc, getDocs, query, orderBy, limit, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
@@ -50,10 +52,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [period, setPeriod] = useState<string>(() => {
-    try {
-      let saved = null; try { saved = localStorage.getItem('dtr_period'); } catch(e) {}
-      if (saved) return saved;
-    } catch(e) {}
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
   }); // YYYY-MM format
@@ -172,12 +170,7 @@ export default function App() {
     return () => unsub();
   }, [currentSessionId]);
 
-  // Update global sync pointer when we manually switch sessions
-  useEffect(() => {
-    if (currentSessionId) {
-      setDoc(doc(db, 'settings', 'sync'), { activeSessionId: currentSessionId }, { merge: true }).catch((e: any) => console.error("Failed to update global sync pointer", e));
-    }
-  }, [currentSessionId]);
+
 
 
   // REAL-TIME CLOUD SYNC
@@ -224,9 +217,7 @@ export default function App() {
     }
   }, [parsedData]);
   
-  useEffect(() => {
-    if (period) { try { localStorage.setItem('dtr_period', period); } catch(e) {} }
-  }, [period]);
+
 
     const createNewSession = async (newDataArray: any[]) => {
     const sessionId = Math.random().toString(36).substring(2, 12);
@@ -234,6 +225,9 @@ export default function App() {
     setCurrentSessionId(sessionId);
     setCurrentSessionName(sessionName);
     setParsedData(newDataArray);
+    
+    // Explicitly update global pointer so other devices follow
+    setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
     
     // Map to object
     const dataMap: any = {};
@@ -256,10 +250,10 @@ export default function App() {
     }
   };
 
-  const loadSavedSessions = async () => {
-    try {
-      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
-      const snap = await getDocs(q);
+  // Use a real-time listener for the sessions list so it updates instantly across devices
+  useEffect(() => {
+    const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
+    const unsubscribe = onSnapshot(q, (snap) => {
       const sessions = snap.docs.map(d => {
         const docData = d.data();
         let dataArray = [];
@@ -271,14 +265,13 @@ export default function App() {
         return { id: d.id, ...docData, data: dataArray };
       });
       setSavedSessions(sessions);
-    } catch (e) {
+    }, (e) => {
       console.error("Failed to load saved sessions", e);
-    }
-  };
-
-  useEffect(() => {
-    loadSavedSessions();
+    });
+    return () => unsubscribe();
   }, []);
+
+  const loadSavedSessions = () => {}; // Stub out old method if referenced elsewhere
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warn' } | null>(null);
 
@@ -853,6 +846,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans text-gray-900 selection:bg-blue-100">
+      <OfflineIndicator />
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -866,6 +860,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <PWAInstallButton />
             {updateAvailable && (
               <button 
                 onClick={handleUpdate} 
@@ -1406,7 +1401,68 @@ export default function App() {
         </Suspense>
       )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      {showBlankPrompt && (
+      
+      {showAllSessionsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm px-4 py-8">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <History className="w-6 h-6 text-blue-500" />
+                All Saved Sessions
+              </h3>
+              <button onClick={() => setShowAllSessionsModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-3 flex-1">
+              {savedSessions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Save className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p>No saved sessions found.</p>
+                </div>
+              ) : (
+                savedSessions.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => {
+                            if (confirm("Load this session? Any unsaved changes in your current view will be lost.")) {
+                              setCurrentSessionId(session.id);
+                              setCurrentSessionName(session.name);
+                              setParsedData(session.data);
+                              if (session.period) setPeriod(session.period);
+                              setShowEditor(true);
+                              setShowAllSessionsModal(false);
+                              // Notify other devices
+                              setDoc(doc(db, 'settings', 'sync'), { activeSessionId: session.id }, { merge: true }).catch(console.error);
+                            }
+                    }}
+                    className="w-full text-left p-4 hover:bg-blue-50 border border-gray-200 rounded-xl transition-all duration-200 group flex justify-between items-center bg-white shadow-sm"
+                  >
+                    <div>
+                      <div className="font-bold text-gray-800 text-lg flex items-center gap-2 mb-1">
+                        <Save className="w-4 h-4 text-blue-500" />
+                        {session.name}
+                      </div>
+                      <div className="text-sm text-gray-500 flex flex-col gap-1">
+                        <span className="font-medium text-gray-700">{session.data?.length || 0} employees • {session.period || "No Period"}</span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Last opened: {session.updatedAt?.toDate ? session.updatedAt.toDate().toLocaleString() : new Date(session.updatedAt).toLocaleString() || 'Recently'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity mb-2 uppercase tracking-wider bg-blue-100 px-2 py-1 rounded-full">Open Session</span>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-transform transform group-hover:translate-x-1" />
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+\n      {showBlankPrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm px-4">
           <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm animate-in zoom-in-95 duration-200">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Create Blank DTR</h3>

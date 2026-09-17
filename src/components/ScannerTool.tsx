@@ -42,11 +42,18 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
     no_biometric: { label: 'No Biometric', people: [] }
   });
   
+
   const [saveStatus, setSaveStatus] = useState<Record<ScannerKey, 'saved' | 'unsaved' | 'saving'>>({
     scanner1: 'saved',
     scanner2: 'saved',
     no_biometric: 'saved'
   });
+  
+  const saveStatusRef = useRef(saveStatus);
+  useEffect(() => {
+    saveStatusRef.current = saveStatus;
+  }, [saveStatus]);
+
 
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
 
@@ -58,38 +65,41 @@ export const ScannerTool = memo(function ScannerTool({ onClose }: { onClose: () 
   }, [data]);
 
   useEffect(() => {
-    // Load from firestore
-    const loadData = async () => {
-      const loaded = { ...data };
-      for (const key of SCANNER_KEYS) {
-        try {
-          const docSnap = await getDoc(doc(db, 'scanner_configs', key));
-          if (docSnap.exists()) {
-            const parsed = docSnap.data();
-            loaded[key] = {
-              label: parsed.label || DEFAULT_LABELS[key],
-              people: Array.isArray(parsed.people) ? parsed.people : []
-            };
-          }
-        } catch (e: any) {
-          console.error("Failed to load scanner config", e);
-        }
-      }
-      setData(loaded);
-      
-      try {
-        const recentSnap = await getDoc(doc(db, 'scanner_configs', 'recent_files_v1'));
-        if (recentSnap.exists()) {
-          const parsedRecent = recentSnap.data();
-          if (Array.isArray(parsedRecent.files)) {
-            setRecentFiles(parsedRecent.files);
+    // Real-time listener for scanner configs
+    const unsubscribers = SCANNER_KEYS.map((key) => {
+      return onSnapshot(doc(db, 'scanner_configs', key), (docSnap) => {
+        if (docSnap.exists()) {
+          const parsed = docSnap.data();
+          
+          // ONLY apply incoming cloud updates if this device is NOT actively editing/saving that specific scanner
+          if (saveStatusRef.current[key] === 'saved') {
+            setData(prev => ({
+              ...prev,
+              [key]: {
+                label: parsed.label || DEFAULT_LABELS[key],
+                people: Array.isArray(parsed.people) ? parsed.people : []
+              }
+            }));
           }
         }
-      } catch (e: any) {
-        console.error("Failed to load recent files config", e);
+      }, (err) => {
+        console.error("Failed to sync scanner config", err);
+      });
+    });
+
+    const recentUnsub = onSnapshot(doc(db, 'scanner_configs', 'recent_files_v1'), (recentSnap) => {
+      if (recentSnap.exists()) {
+        const parsedRecent = recentSnap.data();
+        if (Array.isArray(parsedRecent.files)) {
+          setRecentFiles(parsedRecent.files);
+        }
       }
+    });
+    unsubscribers.push(recentUnsub);
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
     };
-    loadData();
   }, []);
 
   const markUnsaved = (key: ScannerKey) => {

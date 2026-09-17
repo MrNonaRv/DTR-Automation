@@ -184,30 +184,45 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
           records: debouncedSave.records
         });
         setIsSaved(true);
+        setDebouncedSave(null); // Prevent infinite loop!
       }, 300);
       return () => clearTimeout(timer);
     }
   }, [debouncedSave, index, employee, onUpdate]);
 
   const handleRecordChange = (day: number, field: keyof AttendanceRecord, value: string) => {
-    const existingRecord = getRecordForDay(day);
     const dateStr = targetYear !== -1 && targetMonth !== -1 
       ? `${targetYear}-${targetMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
       : `YYYY-MM-${day.toString().padStart(2, '0')}`; // Fallback if no period
       
-    let newRecords;
-    if (existingRecord) {
-      newRecords = editedRecords.map(r => r === existingRecord ? { ...r, [field]: value } : r);
-    } else {
-      newRecords = [...editedRecords, { date: dateStr, amIn: null, amOut: null, pmIn: null, pmOut: null, [field]: value }];
-    }
-    setEditedRecords(newRecords);
-    setIsSaved(false);
-    
-    // Auto-save debounced
-    setDebouncedSave({
-      employeeIdOrName: editedName,
-      records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut)
+    setEditedRecords(prev => {
+      const existingRecord = prev.find(r => {
+        if (!r.date) return false;
+        const parts = r.date.split("-");
+        if (parts.length < 3) return false;
+        const rYear = parseInt(parts[0], 10);
+        const rMonth = parseInt(parts[1], 10);
+        const rDay = parseInt(parts[2], 10);
+        if (targetYear !== -1 && targetMonth !== -1) {
+          return rYear === targetYear && rMonth === targetMonth && rDay === day;
+        }
+        return rDay === day;
+      });
+      
+      let newRecords;
+      if (existingRecord) {
+        newRecords = prev.map(r => r === existingRecord ? { ...r, [field]: value } : r);
+      } else {
+        newRecords = [...prev, { date: dateStr, amIn: null, amOut: null, pmIn: null, pmOut: null, [field]: value }];
+      }
+      
+      setIsSaved(false);
+      setDebouncedSave({
+        employeeIdOrName: editedName,
+        records: newRecords.filter(r => r.amIn || r.amOut || r.pmIn || r.pmOut)
+      });
+      
+      return newRecords;
     });
   };
 
@@ -337,24 +352,28 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
                     <td className="border border-gray-800 font-semibold py-0.5">{day}</td>
                     <td className="border border-gray-800 p-0">
                       <input type="text" disabled={!inTargetRange} value={record?.amIn || ''} onChange={(e) => handleRecordChange(day, 'amIn', e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         onBlur={(e) => handleRecordBlur(day, 'amIn', e.target.value)}
                         className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
                       <input type="text" disabled={!inTargetRange} value={record?.amOut || ''} onChange={(e) => handleRecordChange(day, 'amOut', e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         onBlur={(e) => handleRecordBlur(day, 'amOut', e.target.value)}
                         className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
                       <input type="text" disabled={!inTargetRange} value={record?.pmIn || ''} onChange={(e) => handleRecordChange(day, 'pmIn', e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         onBlur={(e) => handleRecordBlur(day, 'pmIn', e.target.value)}
                         className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />
                     </td>
                     <td className="border border-gray-800 p-0">
                       <input type="text" disabled={!inTargetRange} value={record?.pmOut || ''} onChange={(e) => handleRecordChange(day, 'pmOut', e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         onBlur={(e) => handleRecordBlur(day, 'pmOut', e.target.value)}
                         className={`w-full h-full text-center py-1 outline-none focus:bg-blue-50 transition-colors ${!inTargetRange ? 'bg-gray-100/50 text-transparent select-none' : ''}`}
                       />

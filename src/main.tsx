@@ -21,14 +21,7 @@ const updateSW = registerSW({
 });
 
 
-// Force unregister all old service workers to fix cache issues
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for(let registration of registrations) {
-      registration.unregister();
-    }
-  });
-}
+
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

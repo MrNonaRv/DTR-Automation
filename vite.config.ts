@@ -52,7 +52,7 @@ export default defineConfig(() => {
       chunkSizeWarningLimit: 1200
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true' ? { overlay: false } : false,
+      hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
