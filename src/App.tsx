@@ -979,7 +979,7 @@ export default function App() {
                             <div className="text-xs text-gray-500 mt-1 flex flex-col gap-0.5">
                               <span>{session.data?.length || 0} records • {session.period || "No Period"}</span>
                               <span className="text-[10px] text-gray-400">
-                                Last opened: {session.updatedAt?.toDate ? session.updatedAt.toDate().toLocaleString() : new Date(session.updatedAt).toLocaleString() || 'Recently'}
+                                Last opened: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
                               </span>
                             </div>
                           </div>
@@ -1452,7 +1452,7 @@ export default function App() {
                         <span className="font-medium text-gray-700">{session.data?.length || 0} employees • {session.period || "No Period"}</span>
                         <span className="text-xs text-gray-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          Last opened: {session.updatedAt?.toDate ? session.updatedAt.toDate().toLocaleString() : new Date(session.updatedAt).toLocaleString() || 'Recently'}
+                          Last opened: {session.updatedAt ? (session.updatedAt.toDate ? session.updatedAt.toDate().toLocaleString() : (session.updatedAt.seconds ? new Date(session.updatedAt.seconds * 1000).toLocaleString() : 'Recently')) : 'Just now'}
                         </span>
                       </div>
                     </div>
