@@ -122,26 +122,15 @@ export default function App() {
 
 
 
-  const currentSessionIdRef = React.useRef(currentSessionId);
-  const currentIndexRef = React.useRef(currentIndex);
-
-  useEffect(() => {
-    currentSessionIdRef.current = currentSessionId;
-  }, [currentSessionId]);
-  
-  useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
   // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndexRef.current) {
+        if (data.activeEmployeeIndex !== undefined && data.activeEmployeeIndex !== currentIndex) {
           setCurrentIndex(data.activeEmployeeIndex);
         }
-        if (data.activeSessionId && data.activeSessionId !== currentSessionIdRef.current) {
+        if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
           console.log("Auto-syncing to globally active session:", data.activeSessionId);
           setCurrentSessionId(data.activeSessionId);
           
@@ -150,7 +139,7 @@ export default function App() {
             if (sessionSnap.exists()) {
               const sessionData = sessionSnap.data();
               setCurrentSessionName(sessionData.name);
-              let serverDataArray: any[] = [];
+              let serverDataArray = [];
               if (sessionData.dataMap) {
                 Object.keys(sessionData.dataMap).forEach(k => serverDataArray[Number(k)] = sessionData.dataMap[k]);
               } else if (sessionData.data) {
@@ -166,7 +155,7 @@ export default function App() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [currentSessionId]);
 
 
 
@@ -227,8 +216,7 @@ export default function App() {
     
     // Map to object
     const dataMap: any = {};
-    const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
-    newDataArray.forEach((emp, i) => dataMap[i] = sanitizeObj(emp));
+    newDataArray.forEach((emp, i) => dataMap[i] = emp);
     
     setAutoSaveStatus('saving');
     try {
@@ -656,8 +644,7 @@ export default function App() {
     if (currentSessionId) {
       setAutoSaveStatus('saving');
       const dataMap: any = {};
-      const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
-      newData.forEach((emp, i) => dataMap[i] = sanitizeObj(emp));
+      newData.forEach((emp, i) => dataMap[i] = emp);
       
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
         dataMap: dataMap,
@@ -669,12 +656,6 @@ export default function App() {
         console.error(e);
         setToast({ message: "Failed to sync to cloud. The data might be too large.", type: "error" });
       });
-      
-      // Force sync pointer for other devices
-      setDoc(doc(db, 'settings', 'sync'), { 
-        activeSessionId: currentSessionId,
-        timestamp: serverTimestamp()
-      }, { merge: true }).catch(console.error);
     }
     
     setAutoFillTrigger(prev => prev + 1);
@@ -841,28 +822,14 @@ export default function App() {
     
     // INSTANT CLOUD SYNC FOR THIS SPECIFIC EMPLOYEE ONLY
     if (currentSessionId) {
-      // Remove undefined values to prevent Firestore crashes
-      const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
-      const safeUpdatedEmp = sanitizeObj(updatedEmp);
-
       // Silently sync to avoid UI disruption
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
-        [`dataMap.${idx}`]: safeUpdatedEmp,
+        [`dataMap.${idx}`]: updatedEmp,
         updatedAt: serverTimestamp()
       }).then(() => {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
-      }).catch((e: any) => {
-        console.error("Firestore sync failed:", e);
-        setToast({ message: "Failed to sync to cloud. Data too large or offline.", type: "error" });
-      });
-      
-      // Force sync pointer for other devices
-      setDoc(doc(db, 'settings', 'sync'), { 
-        activeSessionId: currentSessionId,
-        activeEmployeeIndex: idx,
-        timestamp: serverTimestamp()
-      }, { merge: true }).catch(console.error);
+      }).catch((e: any) => console.error(e));
     }
   }, [currentSessionId]);
 
