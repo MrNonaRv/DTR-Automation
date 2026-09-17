@@ -227,7 +227,8 @@ export default function App() {
     
     // Map to object
     const dataMap: any = {};
-    newDataArray.forEach((emp, i) => dataMap[i] = emp);
+    const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
+    newDataArray.forEach((emp, i) => dataMap[i] = sanitizeObj(emp));
     
     setAutoSaveStatus('saving');
     try {
@@ -655,7 +656,8 @@ export default function App() {
     if (currentSessionId) {
       setAutoSaveStatus('saving');
       const dataMap: any = {};
-      newData.forEach((emp, i) => dataMap[i] = emp);
+      const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
+      newData.forEach((emp, i) => dataMap[i] = sanitizeObj(emp));
       
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
         dataMap: dataMap,
@@ -839,14 +841,21 @@ export default function App() {
     
     // INSTANT CLOUD SYNC FOR THIS SPECIFIC EMPLOYEE ONLY
     if (currentSessionId) {
+      // Remove undefined values to prevent Firestore crashes
+      const sanitizeObj = (obj: any) => JSON.parse(JSON.stringify(obj));
+      const safeUpdatedEmp = sanitizeObj(updatedEmp);
+
       // Silently sync to avoid UI disruption
       updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
-        [`dataMap.${idx}`]: updatedEmp,
+        [`dataMap.${idx}`]: safeUpdatedEmp,
         updatedAt: serverTimestamp()
       }).then(() => {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
-      }).catch((e: any) => console.error(e));
+      }).catch((e: any) => {
+        console.error("Firestore sync failed:", e);
+        setToast({ message: "Failed to sync to cloud. Data too large or offline.", type: "error" });
+      });
       
       // Force sync pointer for other devices
       setDoc(doc(db, 'settings', 'sync'), { 
