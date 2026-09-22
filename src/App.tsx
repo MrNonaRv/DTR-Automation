@@ -130,101 +130,78 @@ export default function App() {
 
 
 
-  /*
-  // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
+  // MAGIC GLOBAL AUTO-SYNC (Manual fetch to reduce quota usage)
+  const fetchGlobalSync = async () => {
+    try {
+      const docSnap = await getDoc(doc(db, 'settings', 'sync'));
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.activeEmployeeIndex !== undefined) {
-          setCurrentIndex(prevIndex => {
-            if (data.activeEmployeeIndex !== prevIndex) {
-              return data.activeEmployeeIndex;
-            }
-            return prevIndex;
-          });
+          setCurrentIndex(prevIndex => (data.activeEmployeeIndex !== prevIndex ? data.activeEmployeeIndex : prevIndex));
         }
         if (data.activeSessionId && data.activeSessionId !== currentSessionId) {
           console.log("Auto-syncing to globally active session:", data.activeSessionId);
           setCurrentSessionId(data.activeSessionId);
           
-          // Fetch the data for this session so we can load it instantly
-          getDoc(doc(db, 'dtr_sessions', data.activeSessionId)).then(sessionSnap => {
-            if (sessionSnap.exists()) {
-              const sessionData = sessionSnap.data();
-              setCurrentSessionName(sessionData.name);
-              let serverDataArray = [];
-              if (sessionData.dataMap) {
-                Object.keys(sessionData.dataMap).forEach(k => serverDataArray[Number(k)] = sessionData.dataMap[k]);
-              } else if (sessionData.data) {
-                serverDataArray = sessionData.data;
-              }
-              setParsedData(serverDataArray);
-              if (sessionData.period) setPeriod(sessionData.period);
-              setShowEditor(true);
-              setToast({ message: "Auto-synced with your other device!", type: "info" });
-            }
-          }).catch(e => {
-            if (e.message && e.message.includes("Quota")) {
-               setToast({ message: "Firebase read quota exceeded. Cannot fetch session.", type: "error" });
-            } else {
-               console.error("fetch session error", e);
-            }
-          });
+          const sessionSnap = await getDoc(doc(db, 'dtr_sessions', data.activeSessionId));
+          if (sessionSnap.exists()) {
+            const sessionData = sessionSnap.data();
+            setCurrentSessionName(sessionData.name);
+            let serverDataArray = sessionData.dataMap 
+              ? Object.keys(sessionData.dataMap).reduce((arr: any[], k) => { arr[Number(k)] = sessionData.dataMap[k]; return arr; }, [])
+              : sessionData.data || [];
+            setParsedData(serverDataArray);
+            if (sessionData.period) setPeriod(sessionData.period);
+            setShowEditor(true);
+            setToast({ message: "Auto-synced with your other device!", type: "info" });
+          }
         }
       }
-    }, (e) => {
-      if (e.message && e.message.includes("Quota")) {
-        setToast({ message: "Firebase quota exceeded. Cloud Sync disabled.", type: "error" });
+    } catch (e: any) {
+      if (e.message?.includes("Quota")) {
+        setToast({ message: "Firebase read quota exceeded. Cloud Sync disabled.", type: "error" });
       } else {
-        console.error("settings/sync error", e);
+        console.error("fetchGlobalSync error", e);
       }
-    });
-    return () => unsub();
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalSync();
   }, [currentSessionId]);
 
-  // REAL-TIME CLOUD SYNC
-  useEffect(() => {
-    if (!currentSessionId) return;
-
-    const unsub = onSnapshot(doc(db, 'dtr_sessions', currentSessionId), (docSnap) => {
+  // MANUAL CLOUD SYNC
+  const fetchSessionData = async (sessionId: string) => {
+    if (!sessionId) return;
+    try {
+      const docSnap = await getDoc(doc(db, 'dtr_sessions', sessionId));
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
-        // Convert dataMap back to array
-        let serverDataArray = [];
-        if (data.dataMap) {
-          Object.keys(data.dataMap).forEach(k => serverDataArray[Number(k)] = data.dataMap[k]);
-        } else if (data.data) {
-          serverDataArray = data.data; // Legacy fallback
-        }
+        let serverDataArray = data.dataMap 
+          ? Object.keys(data.dataMap).reduce((arr: any[], k) => { arr[Number(k)] = data.dataMap[k]; return arr; }, [])
+          : data.data || [];
         
         setParsedData(prevData => {
-          if (!prevData) return serverDataArray;
-          // Deep compare string to avoid jitter, but now it's much more stable
           const newDataString = JSON.stringify(serverDataArray);
           const prevDataString = JSON.stringify(prevData);
-          
-          if (newDataString !== prevDataString) {
-            console.log("App: Cloud update received! Data differs. len1=", newDataString.length, " len2=", prevDataString.length);
-            return serverDataArray;
-          }
-          return prevData;
+          return newDataString !== prevDataString ? serverDataArray : prevData;
         });
 
         setPeriod(prev => prev !== data.period ? data.period : prev);
         setCurrentSessionName(prev => prev !== data.name ? data.name : prev);
       }
-    }, (e) => {
-      if (e.message && e.message.includes("Quota")) {
-        setToast({ message: "Firebase quota exceeded. Real-time updates disabled.", type: "error" });
+    } catch (e: any) {
+      if (e.message?.includes("Quota")) {
+        setToast({ message: "Firebase quota exceeded. Cloud Sync disabled.", type: "error" });
       } else {
-        console.error("dtr_sessions sync error", e);
+        console.error("fetchSessionData error", e);
       }
-    });
-    return () => unsub();
+    }
+  };
+
+  useEffect(() => {
+    fetchSessionData(currentSessionId);
   }, [currentSessionId]);
-  */
 
   useEffect(() => {
     lastSavedDataRef.current = null;
@@ -263,7 +240,6 @@ export default function App() {
       
       // Explicitly update global pointer so other devices follow AFTER doc is created
       setDoc(doc(db, 'settings', 'sync'), { activeSessionId: sessionId }, { merge: true }).catch(console.error);
-      loadSavedSessions();
     } catch(e: any) {
       console.error(e);
       setAutoSaveStatus('idle');
@@ -271,11 +247,10 @@ export default function App() {
     }
   };
 
-  // Use a manual loader for sessions instead of real-time listener
-  const loadSavedSessions = async () => {
-    try {
-      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
-      const snap = await getDocs(q);
+  // Use a real-time listener for the sessions list so it updates instantly across devices
+  useEffect(() => {
+    const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
+    const unsubscribe = onSnapshot(q, (snap) => {
       const sessions = snap.docs.map(d => {
         const docData = d.data();
         let dataArray = [];
@@ -287,14 +262,13 @@ export default function App() {
         return { id: d.id, ...docData, data: dataArray };
       });
       setSavedSessions(sessions);
-    } catch (e) {
+    }, (e) => {
+      if (e.message && e.message.includes("Quota")) {
+        setToast({ message: "Cloud quota exceeded. Some online features may be unavailable.", type: "error" });
+      }
       console.error("Failed to load saved sessions", e);
-      setToast({ message: "Failed to load sessions. Cloud features may be limited.", type: "error" });
-    }
-  };
-
-  useEffect(() => {
-    loadSavedSessions();
+    });
+    return () => unsubscribe();
   }, []);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warn' } | null>(null);

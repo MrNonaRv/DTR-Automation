@@ -201,7 +201,7 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
         onUpdate(index, newData);
         setIsSaved(true);
         setDebouncedSave(null); // Prevent infinite loop!
-      }, 300);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [debouncedSave, index, employee, onUpdate]);
