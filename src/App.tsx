@@ -170,13 +170,15 @@ export default function App() {
     fetchGlobalSync();
   }, [currentSessionId]);
 
-  // MANUAL CLOUD SYNC
-  const fetchSessionData = async (sessionId: string) => {
-    if (!sessionId) return;
-    try {
-      const docSnap = await getDoc(doc(db, 'dtr_sessions', sessionId));
+  // REAL-TIME CLOUD SYNC FOR ACTIVE SESSION ONLY
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const unsub = onSnapshot(doc(db, 'dtr_sessions', currentSessionId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        
+        // Convert dataMap back to array
         let serverDataArray = data.dataMap 
           ? Object.keys(data.dataMap).reduce((arr: any[], k) => { arr[Number(k)] = data.dataMap[k]; return arr; }, [])
           : data.data || [];
@@ -190,17 +192,10 @@ export default function App() {
         setPeriod(prev => prev !== data.period ? data.period : prev);
         setCurrentSessionName(prev => prev !== data.name ? data.name : prev);
       }
-    } catch (e: any) {
-      if (e.message?.includes("Quota")) {
-        setToast({ message: "Firebase quota exceeded. Cloud Sync disabled.", type: "error" });
-      } else {
-        console.error("fetchSessionData error", e);
-      }
-    }
-  };
-
-  useEffect(() => {
-    fetchSessionData(currentSessionId);
+    }, (e) => {
+      console.error("dtr_sessions sync error", e);
+    });
+    return () => unsub();
   }, [currentSessionId]);
 
   useEffect(() => {
