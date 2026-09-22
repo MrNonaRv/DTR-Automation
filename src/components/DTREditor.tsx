@@ -24,15 +24,27 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   const [editedRecords, setEditedRecords] = useState<AttendanceRecord[]>(employee.records);
   const [isSaved, setIsSaved] = useState(true);
 
+  const lastSavedRef = React.useRef<string | null>(null);
+
+  const lastIndexRef = React.useRef<number>(index);
+
   useEffect(() => {
-    // Sync local state when employee prop changes from outside (e.g., auto-fill or cloud sync)
-    console.log("DTREditor: employee prop changed. isSaved:", isSaved);
-    // ONLY overwrite if the user isn't actively typing/unsaved
-    if (isSaved) {
-      setEditedName(employee.employeeIdOrName);
-      setEditedRecords(employee.records);
+    const currentStr = JSON.stringify({ employeeIdOrName: employee.employeeIdOrName, records: employee.records || [] });
+    const isIndexChange = lastIndexRef.current !== index;
+    lastIndexRef.current = index;
+    
+    // Only skip update if it's our own update echoing back AND the index hasn't changed
+    if (!isIndexChange && lastSavedRef.current === currentStr) {
+      return; 
     }
-  }, [employee, autoFillTrigger, isSaved]);
+    
+    // We update local state when the prop changes to something new or index changes
+    setEditedName(employee.employeeIdOrName);
+    setEditedRecords(employee.records || []);
+    setIsSaved(true);
+    setDebouncedSave(null);
+    lastSavedRef.current = currentStr;
+  }, [employee, autoFillTrigger, index]);
 
   // Generate 31 days
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -175,15 +187,18 @@ export const DTREditor = memo(function DTREditor({ index, employee, period, prin
   };
 
   const [debouncedSave, setDebouncedSave] = useState<{ employeeIdOrName: string; records: AttendanceRecord[] } | null>(null);
+  
 
   useEffect(() => {
     if (debouncedSave) {
       const timer = setTimeout(() => {
-        onUpdate(index, {
+        const newData = {
           ...employee,
           employeeIdOrName: debouncedSave.employeeIdOrName,
           records: debouncedSave.records
-        });
+        };
+        lastSavedRef.current = JSON.stringify({ employeeIdOrName: newData.employeeIdOrName, records: newData.records });
+        onUpdate(index, newData);
         setIsSaved(true);
         setDebouncedSave(null); // Prevent infinite loop!
       }, 300);

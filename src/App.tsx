@@ -19,6 +19,13 @@ const toTitleCase = (str: string) => {
   });
 };
 export default function App() {
+  const withTimeout = (promise: Promise<any>, ms: number = 5000) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Timeout/Quota exceeded")), ms);
+      promise.then(resolve).catch(reject).finally(() => clearTimeout(timer));
+    });
+  };
+
   const [file, setFile] = useState<File | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => { 
     try { 
@@ -51,6 +58,7 @@ export default function App() {
   });
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const lastSavedDataRef = React.useRef<string | null>(null);
   const [period, setPeriod] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -122,6 +130,7 @@ export default function App() {
 
 
 
+  /*
   // MAGIC GLOBAL AUTO-SYNC (Since it's a single user app, we keep all devices on the same page)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'sync'), (docSnap) => {
@@ -155,15 +164,24 @@ export default function App() {
               setShowEditor(true);
               setToast({ message: "Auto-synced with your other device!", type: "info" });
             }
+          }).catch(e => {
+            if (e.message && e.message.includes("Quota")) {
+               setToast({ message: "Firebase read quota exceeded. Cannot fetch session.", type: "error" });
+            } else {
+               console.error("fetch session error", e);
+            }
           });
         }
+      }
+    }, (e) => {
+      if (e.message && e.message.includes("Quota")) {
+        setToast({ message: "Firebase quota exceeded. Cloud Sync disabled.", type: "error" });
+      } else {
+        console.error("settings/sync error", e);
       }
     });
     return () => unsub();
   }, [currentSessionId]);
-
-
-
 
   // REAL-TIME CLOUD SYNC
   useEffect(() => {
@@ -197,9 +215,19 @@ export default function App() {
         setPeriod(prev => prev !== data.period ? data.period : prev);
         setCurrentSessionName(prev => prev !== data.name ? data.name : prev);
       }
+    }, (e) => {
+      if (e.message && e.message.includes("Quota")) {
+        setToast({ message: "Firebase quota exceeded. Real-time updates disabled.", type: "error" });
+      } else {
+        console.error("dtr_sessions sync error", e);
+      }
     });
-
     return () => unsub();
+  }, [currentSessionId]);
+  */
+
+  useEffect(() => {
+    lastSavedDataRef.current = null;
   }, [currentSessionId]);
 
   useEffect(() => {
@@ -210,7 +238,6 @@ export default function App() {
     }
   }, [parsedData]);
   
-
 
     const createNewSession = async (newDataArray: any[], overridePeriod?: string) => {
     const sessionId = Math.random().toString(36).substring(2, 12);
@@ -225,12 +252,12 @@ export default function App() {
     
     setAutoSaveStatus('saving');
     try {
-      await setDoc(doc(db, 'dtr_sessions', sessionId), {
+      await withTimeout(setDoc(doc(db, 'dtr_sessions', sessionId), {
         name: sessionName,
         period: overridePeriod || period || '',
         dataMap: dataMap,
         updatedAt: serverTimestamp()
-      });
+      }), 10000);
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus('idle'), 500);
       
@@ -240,14 +267,15 @@ export default function App() {
     } catch(e: any) {
       console.error(e);
       setAutoSaveStatus('idle');
-      setToast({ message: "Failed to save session to cloud. File may be too large.", type: "error" });
+      setToast({ message: "Saved locally. Cloud sync pending (offline/quota).", type: "warning" });
     }
   };
 
-  // Use a real-time listener for the sessions list so it updates instantly across devices
-  useEffect(() => {
-    const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
-    const unsubscribe = onSnapshot(q, (snap) => {
+  // Use a manual loader for sessions instead of real-time listener
+  const loadSavedSessions = async () => {
+    try {
+      const q = query(collection(db, 'dtr_sessions'), orderBy('updatedAt', 'desc'), limit(15));
+      const snap = await getDocs(q);
       const sessions = snap.docs.map(d => {
         const docData = d.data();
         let dataArray = [];
@@ -259,13 +287,15 @@ export default function App() {
         return { id: d.id, ...docData, data: dataArray };
       });
       setSavedSessions(sessions);
-    }, (e) => {
+    } catch (e) {
       console.error("Failed to load saved sessions", e);
-    });
-    return () => unsubscribe();
-  }, []);
+      setToast({ message: "Failed to load sessions. Cloud features may be limited.", type: "error" });
+    }
+  };
 
-  const loadSavedSessions = () => {}; // Stub out old method if referenced elsewhere
+  useEffect(() => {
+    loadSavedSessions();
+  }, []);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warn' } | null>(null);
 
@@ -333,8 +363,12 @@ export default function App() {
               });
             }
           }
-        } catch (e) {
-          console.error("Failed to load no_biometric config", e);
+        } catch (e: any) {
+          if (e.message && e.message.includes("Quota")) {
+             setToast({ message: "Firebase read quota exceeded. Cannot fetch non-biometric list.", type: "error" });
+          } else {
+             console.error("Failed to load no_biometric config", e);
+          }
         }
       }
       
@@ -651,15 +685,16 @@ export default function App() {
       const dataMap: any = {};
       newData.forEach((emp, i) => dataMap[i] = emp);
       
-      updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+      withTimeout(setDoc(doc(db, 'dtr_sessions', currentSessionId), {
         dataMap: dataMap,
         updatedAt: serverTimestamp()
-      }).then(() => {
+      }, { merge: true }), 10000).then(() => {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
       }).catch((e: any) => {
+        setAutoSaveStatus('idle');
         console.error(e);
-        setToast({ message: "Failed to sync to cloud. The data might be too large.", type: "error" });
+        setToast({ message: "Cloud sync failed (offline or quota). Saved locally.", type: "warning" });
       });
     }
     
@@ -817,6 +852,35 @@ export default function App() {
     }
   };
 
+  const saveSession = async () => {
+    if (!currentSessionId || !parsedData) return;
+    
+    const dataMap: any = {};
+    parsedData.forEach((emp, i) => dataMap[i] = emp);
+    const dataString = JSON.stringify(dataMap);
+
+    if (lastSavedDataRef.current === dataString) {
+      console.log("No changes detected, skipping save.");
+      return;
+    }
+
+    setAutoSaveStatus('saving');
+    try {
+      await withTimeout(setDoc(doc(db, 'dtr_sessions', currentSessionId), {
+        dataMap: dataMap,
+        updatedAt: serverTimestamp()
+      }, { merge: true }), 10000);
+      
+      lastSavedDataRef.current = dataString;
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 500);
+    } catch (e: any) {
+      setAutoSaveStatus('idle');
+      console.error(e);
+      setToast({ message: "Cloud sync failed (offline or quota). Saved locally.", type: "warning" });
+    }
+  };
+
   const handleUpdateEmployee = React.useCallback(async (idx: number, updatedEmp: EmployeeAttendance) => {
     setParsedData(prev => {
       if (!prev) return null;
@@ -828,13 +892,16 @@ export default function App() {
     // INSTANT CLOUD SYNC FOR THIS SPECIFIC EMPLOYEE ONLY
     if (currentSessionId) {
       // Silently sync to avoid UI disruption
-      updateDoc(doc(db, 'dtr_sessions', currentSessionId), {
+      withTimeout(setDoc(doc(db, 'dtr_sessions', currentSessionId), {
         [`dataMap.${idx}`]: updatedEmp,
         updatedAt: serverTimestamp()
-      }).then(() => {
+      }, { merge: true })).then(() => {
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 500);
-      }).catch((e: any) => console.error(e));
+      }).catch((e: any) => {
+        setAutoSaveStatus('idle');
+        console.error(e);
+      });
     }
   }, [currentSessionId]);
 
@@ -1148,7 +1215,10 @@ export default function App() {
                       Help & Guide
                     </button>
                     <button 
-                      onClick={() => setShowEditor(false)} 
+                      onClick={async () => {
+                        await saveSession();
+                        setShowEditor(false);
+                      }} 
                       className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4 mr-1.5" />
@@ -1202,7 +1272,7 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                     <div className="space-y-1.5">
                       <label htmlFor="period" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Period</label>
-                      <input type="month" id="period" value={period} onChange={(e) => {
+                      <input type="month" id="period" value={period || ''} onChange={(e) => {
                         const val = e.target.value;
                         setPeriod(val);
                         if (currentSessionId) {
@@ -1212,7 +1282,7 @@ export default function App() {
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="printRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Range</label>
-                      <select id="printRange" value={printRange} onChange={(e) => {
+                      <select id="printRange" value={printRange || 'full'} onChange={(e) => {
                         const val = e.target.value as any;
                         setPrintRange(val);
                         if (val === '1-15' || val === '16-31') {
@@ -1226,7 +1296,7 @@ export default function App() {
                     </div>
                     <div className="space-y-1.5">
                       <label htmlFor="userRange" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">Users (e.g. 1, 3-5)</label>
-                      <input type="text" id="userRange" placeholder="All Users" value={userRange} onChange={(e) => setUserRange(e.target.value)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white placeholder:text-gray-400" />
+                      <input type="text" id="userRange" placeholder="All Users" value={userRange || ''} onChange={(e) => setUserRange(e.target.value)} className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white placeholder:text-gray-400" />
                     </div>
                     <div className="lg:col-span-2 flex items-center gap-3">
                       <button onClick={handleDownloadAllDTRs} className="flex-1 inline-flex items-center justify-center px-6 py-2.5 min-h-[46px] bg-blue-600 text-white text-base font-bold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm">
@@ -1260,7 +1330,7 @@ export default function App() {
                       <input
                         type="text"
                         placeholder="Blank = Current User. Or type 'all', '1-5'"
-                        value={autoFillUsers}
+                        value={autoFillUsers || ''}
                         onChange={(e) => setAutoFillUsers(e.target.value)}
                         className="w-full px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 placeholder:text-gray-400 placeholder:font-normal"
                       />
@@ -1269,7 +1339,7 @@ export default function App() {
                     <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm transition-all hover:border-blue-300">
                       <label className="block text-xs font-bold text-blue-500 uppercase tracking-wider mb-2">Step 2: Which Half?</label>
                       <select
-                        value={autoFillRange}
+                        value={autoFillRange || '1-15'}
                         onChange={(e) => setAutoFillRange(e.target.value as any)}
                         className="w-full px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 cursor-pointer bg-white"
                       >
@@ -1281,7 +1351,7 @@ export default function App() {
                     <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm transition-all hover:border-blue-300">
                       <label className="block text-xs font-bold text-blue-500 uppercase tracking-wider mb-2">Step 3: Schedule</label>
                       <select
-                        value={autoFillSchedule}
+                        value={autoFillSchedule || 'none'}
                         onChange={(e) => setAutoFillSchedule(e.target.value as any)}
                         className="w-full px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 cursor-pointer bg-white"
                       >
@@ -1311,7 +1381,8 @@ export default function App() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 space-y-4 sm:space-y-0">
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await saveSession();
                   setCurrentIndex(prev => {
                     const idx = Math.max(0, prev - 1);
                     setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
@@ -1385,7 +1456,8 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await saveSession();
                   setCurrentIndex(prev => {
                     const idx = Math.min(parsedData.length - 1, prev + 1);
                     setDoc(doc(db, 'settings', 'sync'), { activeEmployeeIndex: idx }, { merge: true }).catch(console.error);
